@@ -1,0 +1,13 @@
+
+# To place HTML files in flash as part of the Read Only DataSet Image),
+# simply create a file that lists the names of the HTML files you wish
+# to include. Provide the name of that file in the line below. For an
+# example, see target/apps/sdk_flash/filelist.
+#
+# export HTMLTOFLASH_LIST="YOUR_FILE_LIST"
+
+
+# To use a custom application rather than a demo application, specify
+# where to find the ELF (".out") file.
+#
+# export APPS_OUTFILE="/tmp/custom_app.out"

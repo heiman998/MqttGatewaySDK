@@ -1,0 +1,92 @@
+xp file=ltm3210_user.bin
+烧录
+测试运行一晚，没崩溃
+
+1、mqtt connect包发送成功
+2、mqtt subscibe订阅主题
+3、编写publish
+4、publish的读取和发布已经完成。
+5、测试数据长度超过600个字节的时候，wifi模块会溢出错误，可能是发送数据buffer不够问题引起。 （错误已经，是因为读取payload的数据包大小不够引起溢出错误）
+6、mqtt服务器主动断开设备时，sdk包无法检测到异常，并重新建立连接。这需要在心跳机制检测下重新建立连接。
+7、添加订阅主题，发现主题字符串申请多了，读取数据异常。  10-31
+8、小端模式改大端数据模式   11-17
+9、设置遗言消息，增加请求时间主题
+10、遥控器测试撤布防正常    11-28
+11、添加设置网关MQTT服务器ip地址指令，并测试通过。 11-30
+12、qca_task_start(user_check_connect_network, 0, 1024); 修复里面添加userNetDataDealThread   12-1
+
+bug修复
+11.27 
+1、sent_zigbeelist_msg 删除id 问题
+2、wificonnect_flag 字符不统一进入不了 userNetDataDealThread问题
+3、tempdata=OP_KEY; 重复添加在 sos子设备下
+4、tempdata=TM_KEY; 在 遥控器下增加这个字段
+5、Int_biglittle_Convert(pni->epList[0].times,&convertdata);
+memcpy(&sent_buff[sent_buff_len],&convertdata,4);sent_buff_len+=4;
+时间字段字节长度，字符错误。
+6、report_zb_intonetwork 里面的数据的大小端问题
+7、遥控器是aes 不是ias修复
+8、修复pass ack回复的时候没有带服务器的前面
+9、修复按键配置wifi时，添加zb设备可以上报list和point
+qca_task_start(userNetDataDealThread,0,1024 * 20);//1
+qca_task_start(hm_client_event_task,0,1024 * 30);//1
+10、topic1_buff,"%s/%s/%s/A  主题需大写list
+11、userNetDataDealThread 有时候启动不了这线程，因为qca_task_start(user_check_connect_network, 0, 1024);也需要判断添加
+
+12、userSaveAllInfoToFlash  userFlashWriteSceneLinkageInfoFunc   smartlink进去这些都需要，否则进不去配置模式
+
+
+
+
+存在bug
+1、添加的zb设备后，正常可以添加报警，网关复位后。存进去flash的设备没装载出来
+2、振动传感器添加失败
+3、新的RGB灯设备没添加
+getValidDevNameAndDevType(pRam,data,len);
+the new dev mode id:ZLL-ExtendedColnew node id:f176,devId:1000,mac:80 1c 89 01 00 8d 15 00
+DEVICE_ID_COLOR_DIMMABLE_LIGHT 0x0102
+#define DEVICE_ID_LIGHT_SENSOR 0x0106
+
+4、zigbee一次发多条指令控制时，只接收处理了第一条。这地方看情况需要怎么修改 (rgb需要可一起设置使能)
+
+
+
+需打开的
+测试 去掉 userCheckDevOnOffLineByTimerEvent();
+
+加网方式 
+以前RGB灯， 3s开关3次加网。
+
+现在RGB灯，开关6次闪加网。
+
+
+
+fa 07 68 1d 4c 01 01 05 02 56 f5 
+fa 0a 68 1d 4c 01 01 05 00 00 ff 00 ab f5 
+fa 0a 68 1d 4c 01 01 05 00 01 ff 00 aa f5 
+fa 0a 68 1d 4c 01 01 05 00 03 ff 00 a8 f5 
+fa 07 68 1d 4c 01 01 05 02 56 f5 
+
+erase addr:113000the check on off index:2
+erase addr:113000is dev joined led action
+erase addr:ca000is dev joined led action   pni_tmp->shortAddr:6de,1758
+
+
+pni_tmp->shortAddr:6de,1758
+ pni_tmp->shortAddr:a014,40980
+i_tmp->shortAddr:8612,34322
+
+
+
+ pin_ram->shortAddr --------17a5,6053
+the list was null
+
+  userFlashInitToRam devNumInfo.devIndex[1] -------------------1
+init to ram dev list :16201
+
+ pin_ram->shortAddr --------6f14,28436
+
+
+erase addr:ca000
+ ------userUpdateDevInfoDataToFlash --pni->flashAddr:ca000
+ ------userUpdateDevInfoDataToFlash --pni->flashAddr:cb000

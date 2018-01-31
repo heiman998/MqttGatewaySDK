@@ -1,0 +1,59 @@
+# xt-gdb script to read and show otp content
+# AR4004/AR4002 [KF 1.1.2]
+#
+# Usage:
+#   cd to "image" directory
+#   xt-gdb -x gdb.otpdump
+#     target remote xx.xx.xx.xx:20000
+#     otpdump
+#
+
+define otpdump
+  reset
+  set *((int *)0x180c0) |= 0xcf
+  set pagination off
+  set confirm no
+  delete
+
+  reset 
+  #hbreak *0x940f98
+  #cont
+  #delete
+  #
+  hbreak *0xa05e00
+  set *((int *)0x42881c)=0xa05e00
+  set *((int *)0x180c0) |= 0xcf
+  cont
+  delete
+  load otpdump.out
+  add-symbol-file otpdump.out 0xa05e00
+
+#  hbreak *0x00940a7c
+
+#  cont
+
+  set $j = 0
+  set $offset = 0
+
+  echo     \n------------  OTP DATA ------------\n\n
+
+  while $j < 64
+    set $i = 0
+    while $i < 16
+       printf "%02x ", otpdata[$offset]
+       set $i = $i + 1
+       set $offset = $offset + 1
+    end
+    printf "\n"    
+    set $j = $j + 1
+  end
+
+  delete
+  set confirm yes
+  echo \notpdump is DONE\n
+
+  cont
+
+end
+                                                                 
+

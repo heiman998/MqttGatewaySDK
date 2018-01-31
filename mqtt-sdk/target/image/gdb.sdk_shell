@@ -1,0 +1,134 @@
+# Ruby5.0 xt-gdb script to execute sdk_shell without
+# programming flash.
+# 2016-07-21
+# 2017-01-06
+# Usage:
+# cd YOUR_PATH/image (where sdk_shell.out is located)
+# xt-gdb -x gdb.sdk_shell
+#  (xt-gdb) target remote YOUR_OCD_IP_ADDRESS:20000
+#  (xt-gdb) sdk_shell
+#  (xt-gdb) cont
+#
+# This macro is patterned after sdk_flash/make_flash_host_less.sh.
+#
+
+define sdk_shell
+reset
+set pagination off
+
+# boot flags
+set *(int *)0x5000=0x0
+set *((int *)0x180c0) |= 0x8d
+
+set confirm no
+delete
+#  hbreak athos_init_part1
+hbreak *0x900d90
+cont
+delete
+
+#merge from kf3.2 CL1127505
+#_nvram_autoload
+hbreak *0x91aedc
+cont
+delete
+set $a10=0
+#0x90084a <athos_run_app>;before return;
+hbreak *0x90084a
+
+# host_specified_app_start
+set *((int *)0x421bf0)=0xa05e00
+
+cont
+delete
+ 
+set $tmp0=$a0
+set $tmp1=$a1
+set $tmppc=$pc
+
+#
+# Execute tune.out
+#
+load tune.out
+set $pc=$tmppc
+set $a10=0xa02000
+#athos_run_app return address; xt-objdump -S sw.rom.out
+hbreak *0x90084d
+stepi
+set $a2=0	
+cont
+
+#
+# Execute sdk_proxy.out
+#
+load sdk_proxy.out
+set $a0=$tmp0
+set $a1=$tmp1
+set $pc=$tmppc
+set $a10=0xa05600
+stepi
+set $a2=0
+cont
+
+#
+# Load Board Data
+#
+restore ../bddata/boardData_2_1_SP242.bin binary 0x4de000
+
+# hi_board_data
+#set $host_interest=((struct host_interest_s *)0x00420800)
+#set $host_interest->hi_board_data=0x4de000
+set *((int *)0x420854)=0x4de000
+
+# hi_board_data_initialized
+#set $host_interest->hi_board_data_initialized=1
+set *((int *)0x420858)=1
+
+#
+# Execute boot_router.out
+#
+load boot_router.out
+set $a0=$tmp0
+set $a1=$tmp1
+set $pc=$tmppc
+set $a10=0xa05e00
+stepi
+set $a2=0
+cont
+
+#
+# Execute otp_iot.out
+#
+load otp_iot.out
+set $a0=$tmp0
+set $a1=$tmp1
+set $pc=$tmppc
+set $a10=0xa05e00
+stepi
+set $a2=2
+cont
+
+#
+# Load patches
+#
+restore ../bddata/data.patch.hw7_6.bin binary 0x4dded4
+# hi_dset_list_head
+set *((int *)0x420818)=0x4dded4
+
+delete
+
+#
+# Execute sdk_shell
+# Note you may change sdk_shell.out to another similar application
+# and change the start address (assigned to $a10) to the address
+# indicated by
+#   xt-objdump -f other_application.out
+#
+load iot_demo.out
+set $a10=0xa05e00
+set *((int *)0x42081c)=$a10
+set $a0=$tmp0
+set $a1=$tmp1
+set $pc=$tmppc
+set confirm yes
+end

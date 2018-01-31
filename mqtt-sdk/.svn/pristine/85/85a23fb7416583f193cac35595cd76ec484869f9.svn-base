@@ -1,0 +1,830 @@
+#include "qcom_common.h"
+#include "hm_app.h"
+#include "qca_json.h"
+#include "qca_ltlink.h"
+#include "qca_sniffer.h"
+#include "qca_ap_connect.h"
+#include "hm_keyAndSmartLink.h"
+#include "qcom_gpio.h"
+#include "qca_gpio.h"
+#include "hm_halBeep.h"
+#include "hm_net_data_manage.h"
+#include "Xlink_Head_Adaptation.h"
+#include "hm_zigbeeStateDeal.h"
+#include "hm_timerEvent.h"
+/**
+* @brief: device id
+*/
+
+
+DEV_MYSELF_INFO hmIotsDevInfo;
+tGlobal_net_type tGlobal_net;
+static unsigned int ip;
+static unsigned int mask;
+static unsigned int gateway;
+
+static qcom_timer_t smartLink_timer;
+static qcom_timer_t gpio_timer;
+static qcom_timer_t deshake_timer;
+uint8_t waitKeyTimeOverFlag = 0;
+uint8_t buttonValidNum = 0;
+uint8_t buttonValidLastLowLevel = 0;
+extern TX_SEMAPHORE beep_semaphore_ptr;
+extern BEEP_INFO beep_info;
+extern GWSTATFORTIME gwStateForRealTime;
+
+extern int wifi_connect_flag;
+
+
+static void smartLink_timer_handle(unsigned int alarm, void *arg)
+{
+	static uint16_t enterNum = 0;
+	enterNum ++;
+	if(enterNum % 2)
+	{
+		qca_gpio_set_pin_status(RGB_B,0);
+		qca_gpio_set_pin_status(RGB_R,1);
+		qca_gpio_set_pin_status(RGB_G,0);
+	}else{
+		qca_gpio_set_pin_status(RGB_B,0);
+		qca_gpio_set_pin_status(RGB_R,0);
+		qca_gpio_set_pin_status(RGB_G,0);
+	}
+	if(enterNum >= 720)
+	{
+  		*((int8_t *)arg) = 1;
+  		enterNum = 0;
+  	}
+}
+
+
+
+
+
+void reset_system_info_flash(DEV_MYSELF_INFO *tempDevInfo)
+{
+	uint8_t i;
+	tempDevInfo->head = 0xaa;
+	tempDevInfo->end = 0x55;
+	printf("start make aes key\r\n");
+	//user_make_aes_key(tempDevInfo->aesKey);
+	memcpy(tempDevInfo->aesKey,DEFAULT_AES_128_KEY,strlen(DEFAULT_AES_128_KEY));//16
+	printf("the aes key:");
+	for(i = 0; i < 16; i ++)
+	{
+		printf("%02X ",tempDevInfo->aesKey[i]);
+	}
+	printf("\r\n");
+	tempDevInfo->wifiInfo.work_mode = NONE_MODE;
+	tempDevInfo->app_language = LANGUAGE_CHINESE;
+	tempDevInfo->beep_alarm_times = 30;
+	memset(tempDevInfo->gwName,'\0',NAME_MAX_LEN);
+	memcpy(tempDevInfo->gwName,WIFI_DEV_DFUALT_NAME,strlen(WIFI_DEV_DFUALT_NAME));
+	//tempDevInfo->gwName[strlen(WIFI_DEV_DFUALT_NAME)] = '\0';
+	tempDevInfo->light_level = 80;
+	tempDevInfo->light_on_times = 60;
+	tempDevInfo->sensor_arm_type = SENSOR_ARM;
+	memset((char*)&tempDevInfo->sensor_arm_timer,0,sizeof(ARMFORTIMER));//arm timer
+	memset((char*)&tempDevInfo->home_arm_for_dev,0,sizeof(HOME_ARM_FOR_DEV));//home arm dev list
+	memset((char*)&tempDevInfo->gwLightForNight,0,sizeof(GWLIGHT_FOR_DEV));//light link dev list
+	tempDevInfo->sound_level = 10;
+	tempDevInfo->time_zones = 800;
+	tempDevInfo->light_onoff = 0;
+	//tempDevInfo->ipaddr=0;//add
+	memset((char*)&tempDevInfo->ipaddr,0,40);
+	memset(tempDevInfo->romId,'\0',ROOM_ID_MAX_LEN);
+}
+
+void system_info_flash_init(DEV_MYSELF_INFO *tempDevInfo)
+{
+	 	qca_load_flash_params(FLASH_BASIC_ADDR + START_ADDR_FLASH_DEV_MYSELF_INFO_OFFSET, (unsigned char *)tempDevInfo, sizeof(DEV_MYSELF_INFO));
+	 	if((tempDevInfo->head == 0xaa) && (tempDevInfo->end == 0x55))
+	 	{
+	 			printf("the flash of the system info data was valid\r\n");
+	 			printf("wifi mode:%d,ssid:%s,key:%s\r\n",tempDevInfo->wifiInfo.work_mode,tempDevInfo->wifiInfo.sta_ssid,tempDevInfo->wifiInfo.sta_password);
+				//aesKey hmIotsDevInfo.ipaddr
+				printf("gateway aeskey:%s,time_zones:%x  %d",tempDevInfo->aesKey,tempDevInfo->time_zones,tempDevInfo->time_zones);
+				printf("hmIotsDevInfo.ipaddr:%s\n",tempDevInfo->ipaddr);
+		}else{
+	 			printf("the flash of the system info data was invalid,set to factory now\r\n");
+	 			reset_system_info_flash(tempDevInfo);
+	 			qca_save_flash_params(FLASH_BASIC_ADDR + START_ADDR_FLASH_DEV_MYSELF_INFO_OFFSET, (unsigned char *)tempDevInfo, sizeof(DEV_MYSELF_INFO));
+	 	}
+}
+
+static void ltlink_json(char *pdata, char *mac)
+{
+	json_t			*root,*device_js;
+	char			*pjson;
+	char	*pIp = mem_alloc(18); 
+
+	sprintf(pIp,IPV4_FMT,IPV4_ADDR(ip));
+
+	root =  json_create_object();
+	json_add_item_to_object(root, "device", device_js = json_create_object());
+	json_add_item_to_object(device_js, "deviceName", json_create_string(WIFI_DEV_DFUALT_NAME));
+	json_add_item_to_object(device_js, "macAddress", json_create_string(mac));
+	json_add_item_to_object(device_js, "deviceIP", json_create_string(pIp));
+	pjson = json_PrintUnformatted(root);
+
+	
+	strcpy(pdata, pjson);
+	mem_free(pIp);
+	json_delete(root);
+	json_free(pjson);
+}
+
+/**
+* @fn void ltlink_success_respond(void)
+* @brief 
+* @param 
+* @return 
+*/
+void ltlink_success_respond(void)
+{
+	char *pData = NULL;
+	char *pMac = NULL;
+	char *pMacStr = NULL;
+
+	pData = mem_alloc(128);
+	pMac = mem_alloc(8);
+	pMacStr = mem_alloc(16);
+
+	memset(pData, 0, 128);
+	memset(pMac, 0, 8);
+
+	qcom_mac_get(DEVICE_ID, (unsigned char *)pMac);	
+	memcpy(hmIotsDevInfo.wifiMac,pMac,6);
+	sprintf(pMacStr, "%02X%02X%02X%02X%02X%02X", 
+		pMac[0], pMac[1], pMac[2], pMac[3], pMac[4], pMac[5]);
+
+	printf("the mac:%02x%02x%02x%02x%02x%02x", 
+		pMac[0], pMac[1], pMac[2], pMac[3], pMac[4], pMac[5]);
+
+	ltlink_json(&pData[1], pMacStr);
+	printf("debug the link rsp app :%s\r\n",&pData[1]);
+	pData[0] = '^';
+	sprintf(pData,"%s%s",pData,"&");
+	qca_ltlink_response(8001, pData, strlen(pData), 10, 50);
+
+	mem_free(pData);
+	mem_free(pMac);
+	mem_free(pMacStr);
+}
+
+
+/**
+* @fn qca_ltlink_success_cb(char *ssid, char *password, WLAN_AUTH_MODE auth, WLAN_CRYPT_TYPE crypt)
+* @brief ltlink success callback function
+* @param ssid		AP's ssid
+* @param password	AP's password
+* @param respond    link response
+* @param auth		refer to WLAN_AUTH_MODE
+* @param crypt		refer to WLAN_CRYPT_TYPE
+*/
+void qca_ltlink_success_cb(char *ssid, char *password, WLAN_AUTH_MODE auth, WLAN_CRYPT_TYPE crypt)
+{
+	DEV_MYSELF_INFO *tempDevInfo = &hmIotsDevInfo;
+	char				*p;
+
+	printf("------------Ltink success----------------\n");
+	printf("ssid: %s\n", ssid);
+	printf("password: %s\n", password);
+
+
+	p = strchr(password, '+');
+
+	if (p != NULL)
+	{
+		*p = 0x0;
+	}
+
+	strcpy(tempDevInfo->wifiInfo.sta_ssid, ssid);
+	strcpy(tempDevInfo->wifiInfo.sta_password, password);
+
+	tempDevInfo->wifiInfo.work_mode = STATION_MODE;
+	tempDevInfo->wifiInfo.sta_mode = WITH_SCAN;
+
+	qca_save_flash_params(FLASH_BASIC_ADDR + START_ADDR_FLASH_DEV_MYSELF_INFO_OFFSET, (unsigned char *)tempDevInfo, sizeof(DEV_MYSELF_INFO));
+
+	
+	qcom_thread_msleep(200);
+	userCheckSaveFlashAndReset(0);			// 锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷AP锟缴癸拷锟襟，回革拷response
+}
+
+/**
+* @fn void user_promiscuous_cb(unsigned char *buf, int length)
+* @brief register promiscuous callback
+* @param buf Data received in promiscuous mode
+* @param length the length of data
+* @return none
+*/
+void user_promiscuous_cb(unsigned char *buf, int length)
+{
+	qca_ltlink_promiscuous_cb(buf, length);
+}
+
+void userSmartLinkLedInit(void)
+{
+	qca_gpio_set_pin_dir(RGB_G,0);
+	qca_gpio_set_pin_status(RGB_G,0);
+
+	qca_gpio_set_pin_dir(RGB_R,0);
+	qca_gpio_set_pin_status(RGB_R,0);
+
+	qca_gpio_set_pin_dir(RGB_B,0);
+	qca_gpio_set_pin_status(RGB_B,0);
+}
+
+void hm_smart_link_start(void)
+{
+	int channel;
+	int ret;
+	int8_t arg = 0;
+	DEV_MYSELF_INFO *tempDevInfo = &hmIotsDevInfo;
+	printf("start smart link\r\n");
+	userSmartLinkLedInit();
+	qcom_timer_init(&smartLink_timer, smartLink_timer_handle, &arg, 1000, PERIODIC);
+	qcom_timer_start(&smartLink_timer);
+	
+	//== register callback function
+	qcom_set_promiscuous_rx_cb(user_promiscuous_cb);
+
+	//== start ltlink
+	ret = qca_ltlink_start(qca_ltlink_success_cb);
+	if(ret < 0)
+	{
+		return;
+	}
+	if(tempDevInfo->wifiInfo.sta_ssid[0] != 0xff)//判断ssid是否有效，
+	{
+		tempDevInfo->wifiInfo.work_mode = STATION_MODE;
+		tempDevInfo->wifiInfo.sta_mode = WITH_SCAN;
+	}else{
+		tempDevInfo->wifiInfo.work_mode = NONE_MODE;
+	}
+	qca_save_flash_params(FLASH_BASIC_ADDR + START_ADDR_FLASH_DEV_MYSELF_INFO_OFFSET, (unsigned char *)tempDevInfo, sizeof(DEV_MYSELF_INFO));
+	qcom_thread_msleep(200);
+
+	while(1)
+	{
+		if(arg == 1)
+		{
+			printf("smart link not find the valid net work\r\n");
+			userCheckSaveFlashAndReset(0);
+		}
+		qcom_thread_msleep(100);
+
+		//== Check if the channel has been locked 
+		if (qca_ltlink_is_lock_channel() == 1)
+		{
+			continue;
+		}
+
+		channel = qca_ltlink_get_next_valid_channel();
+		if (channel != 0)
+		{
+			qcom_set_channel(DEVICE_ID, channel);
+		}
+	}
+}
+
+
+/**
+* @fn void sniffer_success_cb(char *ssid, char *password, unsigned char response, tSuccessMode_Type tmode)
+* @brief sniffer success callback
+* @param *ssid recive ssid
+* @param *password recive password
+* @param response recive response
+* @param mode smartlink mode
+* @return none
+*/
+void sniffer_success_cb(char *ssid, char *password, unsigned char response, tSuccessMode_Type tmode)
+{
+	DEV_MYSELF_INFO *tempDevInfo = &hmIotsDevInfo;
+
+	switch (tmode)
+	{
+	case AIRKISS:
+
+		printf("airkiss recv success.\n");
+		break;
+	case SNIFFER:
+
+		printf("sniffer recv success.\n");
+		break;
+	default:break;
+	}
+
+	printf("ssid:%s\n", ssid);
+	printf("password:%s\n", password);
+
+	strcpy(tempDevInfo->wifiInfo.sta_ssid, ssid);
+	strcpy(tempDevInfo->wifiInfo.sta_password, password);
+	tempDevInfo->wifiInfo.sta_respond = response;
+	tempDevInfo->wifiInfo.work_mode = STATION_MODE;
+	tempDevInfo->wifiInfo.sta_mode = WITH_SCAN;
+
+	qca_save_flash_params(FLASH_BASIC_ADDR + START_ADDR_FLASH_DEV_MYSELF_INFO_OFFSET, (unsigned char *)tempDevInfo, sizeof(DEV_MYSELF_INFO));
+
+	qcom_thread_msleep(200);
+	userCheckSaveFlashAndReset(0);	
+
+}
+void sniffer_success_test(char *ssid, char *password, unsigned char response, tSuccessMode_Type tmode)
+{
+	DEV_MYSELF_INFO *tempDevInfo = &hmIotsDevInfo;
+
+	switch (tmode)
+	{
+	case AIRKISS:
+
+		printf("airkiss recv success.\n");
+		break;
+	case SNIFFER:
+
+		printf("sniffer recv success.\n");
+		break;
+	default:break;
+	}
+
+	printf("ssid:%s\n", ssid);
+	printf("password:%s\n", password);
+
+	strcpy(tempDevInfo->wifiInfo.sta_ssid, ssid);
+	strcpy(tempDevInfo->wifiInfo.sta_password, password);
+	tempDevInfo->wifiInfo.sta_respond = response;
+	tempDevInfo->wifiInfo.work_mode = STATION_MODE;
+	tempDevInfo->wifiInfo.sta_mode = WITH_SCAN;
+
+	qca_save_flash_params(FLASH_BASIC_ADDR + START_ADDR_FLASH_DEV_MYSELF_INFO_OFFSET, (unsigned char *)tempDevInfo, sizeof(DEV_MYSELF_INFO));
+
+	qcom_thread_msleep(200);
+		
+
+}
+
+void hm_start_smartlink_mode(int mode)
+{
+	switch (mode)
+	{
+		case AIRKISS_MODE://保留
+			qca_sniffer_start(SCAN_CHANNEL_MODE, sniffer_success_cb);
+			qca_set_sniffer_en(EN_AIRKISS);
+			break;
+		case SNIFFER_MODE:  //保留
+			qca_sniffer_start(SCAN_CHANNEL_MODE, sniffer_success_cb);
+			qca_set_sniffer_en(EN_SNIFFER);
+			break;
+		case CONFIG_MODE:   //保留
+			qca_sniffer_start(SCAN_CHANNEL_MODE, sniffer_success_cb);
+			qca_set_sniffer_en(EN_ALL);
+			break;
+		case LTLINK_MODE:
+			hm_smart_link_start();
+			break;
+		default:
+	
+			break;
+	}
+}
+
+void hm_network_init(void)
+{
+	int		ret;
+	uint8_t retry = 0;
+	gpio_init_func();
+	DEV_MYSELF_INFO *tempDevInfo = &hmIotsDevInfo;
+	userNetMemInit();
+	system_info_flash_init(tempDevInfo);
+	switch(tempDevInfo->wifiInfo.work_mode)
+	{
+		case SOFTAP_MODE:
+			printf("NT:0017,%s,%s,%d\r\n", tempDevInfo->wifiInfo.sap_ssid, tempDevInfo->wifiInfo.sap_password, tempDevInfo->wifiInfo.sap_channel);
+			// start softAP mode
+			//qca_start_softap_mode(tempDevInfo->wifiInfo.sap_ssid, tempDevInfo->wifiInfo.sap_password, tempDevInfo->wifiInfo.sap_channel);
+	
+			//printf("NT:0009,%s,%s,%s\r\n", SOFTAP_IP, SOFTAP_MASK, SOFTAP_GATEWAY);
+	
+			// create UDP/TCP Server/TCP Client task
+			//qca_socket_init();
+	
+			break;
+		case STATION_MODE:
+			printf("NT:0002\r\n");
+			while (1)
+			{
+				tGlobal_net.connect_state = CONNECTTING_STATE;
+				if (WITHOUT_SCAN == tempDevInfo->wifiInfo.sta_mode)
+				{
+					;
+					//qca_ap_set_auth_encrypt(pParam->sta_auth, pParam->sta_cryte);
+					//ret = qca_start_station_mode(WITHOUT_SCAN, pParam->sta_ssid, pParam->sta_password, 20000);
+				}
+				else
+				{
+					//hardy add
+					//tempDevInfo->wifiInfo.sta_ssid,tempDevInfo->wifiInfo.sta_password
+					printf( "qca_start_station_mode    WITH_SCAN------------\n");
+				//	memcpy(tempDevInfo->wifiInfo.sta_ssid,"WIFI_8A05",strlen("WIFI_8A05"));
+				//	memcpy(tempDevInfo->wifiInfo.sta_password,"heiman2017..",strlen("heiman2017.."));
+					ret = qca_start_station_mode(WITH_SCAN, tempDevInfo->wifiInfo.sta_ssid, tempDevInfo->wifiInfo.sta_password, 3000);
+				}
+				
+				if (ret == CONNECT_OK)
+				{
+					wifi_connect_flag=1;
+					printf( "ret == CONNECT_OK------------00\n");
+					qcom_ip_address_get(DEVICE_ID, &ip, &mask, &gateway);
+					//ltlink_success_respond();
+	//				qca_airkiss(AIRKISS_V2, "gh_a1add65ebcdf", "4kCdtL0og", pParam->sta_respond);
+					ltlink_success_respond();
+					
+					printf( "ret == CONNECT_OK------------\n");
+					printf( "123 --NT:0009" "," IPV4_FMT "," IPV4_FMT "," IPV4_FMT "\r\n", IPV4_ADDR(ip), IPV4_ADDR(mask), IPV4_ADDR(gateway));
+	
+					tGlobal_net.connect_state = CONNECTED_STATE;
+					ltlink_success_respond();
+					ltlink_success_respond();
+					/*if(pParam->savepower == 1){
+						qcom_set_power_mode(DEVICE_ID, REC_POWER);
+	            				cmnos_power_syssleep_control(1);
+					}*/
+					break;
+				}
+				else if (ret == SSID_ERROR)
+				{
+					break;
+				}
+				else if (ret == PASSWORD_ERROR)
+				{
+					break;
+				}else{
+					break;
+				}
+			}
+			break;
+		case SNIFFER_MODE:
+			printf("NT:0014\r\n");
+			tGlobal_net.connect_state = CONFIG_STATE;
+			hm_start_smartlink_mode(SNIFFER_MODE);
+			break;
+		case AIRKISS_MODE:
+			printf("NT:0004\r\n");
+			tGlobal_net.connect_state = CONFIG_STATE;
+			hm_start_smartlink_mode(AIRKISS_MODE);
+			break;
+		case LTLINK_MODE:
+			printf("NT:0018\r\n");
+			tGlobal_net.connect_state = CONFIG_STATE;
+			hm_start_smartlink_mode(LTLINK_MODE);
+			break;
+		default:
+			break;
+	}
+	printf("the network station:%d\r\n",tGlobal_net.connect_state);
+	if(tGlobal_net.connect_state == CONNECTTING_STATE)
+	{
+		printf("CONNECTTING_STATE--------------  01\r\n");
+		qca_task_start(user_check_connect_network, 0, 1024);		
+	}else{
+
+		if(tGlobal_net.connect_state == CONNECTED_STATE)
+		{
+			printf("CONNECTED_STATE--------------  0122\r\n");
+		 	qca_task_start(user_https_task_start,0,1024 * 30);
+		 	qca_task_start(userNetDataDealThread,0,1024 * 20);
+		}
+	}
+}
+
+void user_check_connect_network(unsigned int arg)
+{
+	int ret;
+	while(1)
+	{
+		if(tGlobal_net.connect_state == CONNECTTING_STATE)
+		{
+			if(hmIotsDevInfo.wifiInfo.work_mode == STATION_MODE)
+			{
+				if (WITHOUT_SCAN == hmIotsDevInfo.wifiInfo.sta_mode)
+				{
+					;
+				}
+				else
+				{
+					ret = qca_start_station_mode(WITH_SCAN, hmIotsDevInfo.wifiInfo.sta_ssid, hmIotsDevInfo.wifiInfo.sta_password, 20000);
+				}
+				
+				if (ret == CONNECT_OK)
+				{
+					qcom_ip_address_get(DEVICE_ID, &ip, &mask, &gateway);
+					ltlink_success_respond();
+	//				qca_airkiss(AIRKISS_V2, "gh_a1add65ebcdf", "4kCdtL0og", pParam->sta_respond);
+					
+					wifi_connect_flag=1;
+					printf( "023- NT:0009" "," IPV4_FMT "," IPV4_FMT "," IPV4_FMT "\r\n", IPV4_ADDR(ip), IPV4_ADDR(mask), IPV4_ADDR(gateway));
+	
+					tGlobal_net.connect_state = CONNECTED_STATE;
+					qca_task_start(user_https_task_start,0,1024 * 30);
+					qca_task_start(userNetDataDealThread,0,1024 * 20);
+					ltlink_success_respond();
+					qca_task_exit();
+				}
+			}
+		}
+		qcom_thread_msleep(1000);
+	}
+}
+
+
+
+
+
+/*static void gpio_timer_handle(unsigned int alarm, void *arg)
+{
+    	printf("timer wake up for gpio\r\n");
+    	if( qca_gpio_get_pin_status(BUTTON ) == 1)
+    	{
+  		waitKeyTimeOverFlag = 1;
+  	}else{
+		if(buttonValidNum == 0)
+		{
+			qcom_timer_start(&deshake_timer);
+		}else{
+			waitKeyTimeOverFlag = 1;
+			buttonValidLastLowLevel = 1;
+		}
+  	}
+}
+
+static void gpio_deshake_timer_handle(unsigned int alarm, void *arg)
+{
+	printf("timer wake up for deshake\r\n");
+	if( qca_gpio_get_pin_status(BUTTON ) == 0)
+	{
+		if(waitKeyTimeOverFlag == 0)
+		{
+			if(buttonValidNum == 0)
+			{
+				buttonValidNum = KEY_VALID_NUM_LONG_TIME_SMARTLINK;
+				waitKeyTimeOverFlag = 1;
+				buttonValidLastLowLevel = 1;
+			}
+		}
+	}else{
+		buttonValidNum = 0;
+	}
+}
+
+static void network_button_handler(void *arg)
+{
+	uint8_t ret = qca_gpio_get_pin_status(BUTTON );
+	printf("enter gpio interrupt func:%d\r\n",ret);
+	if( qca_gpio_get_pin_status(BUTTON ) == 0)
+	{
+		qcom_timer_stop(&gpio_timer);
+		if(waitKeyTimeOverFlag == 0)
+		{
+			qcom_timer_start(&gpio_timer);
+		}
+	}else{
+		if(buttonValidLastLowLevel == 0)
+		{
+			qcom_timer_stop(&deshake_timer);
+			if(waitKeyTimeOverFlag == 0)
+			{
+				buttonValidNum ++;
+				if(buttonValidNum >= 5)
+				{
+					waitKeyTimeOverFlag = 1;
+				}
+			}
+		}else{
+			buttonValidLastLowLevel = 0;
+		}
+	}
+}*/
+
+
+
+
+/*static void gpio_timer_handle(unsigned int alarm, void *arg)
+{
+    	printf("timer wake up for gpio\r\n");
+    	if( qca_gpio_get_pin_status(BUTTON ) == 1)
+    	{
+  		waitKeyTimeOverFlag = 1;
+  	}else{
+		if(buttonValidNum == 1)
+		{
+			qcom_timer_start(&deshake_timer);
+		}else{
+			waitKeyTimeOverFlag = 1;
+		}
+  	}
+}
+
+static void gpio_deshake_timer_handle(unsigned int alarm, void *arg)
+{
+	if( qca_gpio_get_pin_status(BUTTON ) == 0)
+	{
+		if(waitKeyTimeOverFlag == 0)
+		{
+			if(buttonValidNum == 1)
+			{
+				buttonValidNum = KEY_VALID_NUM_LONG_TIME_SMARTLINK;
+				waitKeyTimeOverFlag = 1;
+				buttonValidLastLowLevel = 1;
+			}
+		}
+	}else{
+		buttonValidNum = 0;
+	}
+}
+
+static void network_button_handler(void *arg)
+{
+	uint8_t ret = qca_gpio_get_pin_status(BUTTON );
+	if( qca_gpio_get_pin_status(BUTTON ) == 0)
+	{
+		qcom_timer_stop(&gpio_timer);
+		if(waitKeyTimeOverFlag == 0)
+		{
+			qcom_timer_start(&gpio_timer);
+			buttonValidNum ++;
+			if(buttonValidNum >= KEY_VALID_NUM_RESET_GW)
+			{
+				waitKeyTimeOverFlag = 1;
+			}
+		}
+	}
+}*/
+
+static void network_button_handler(void *arg)
+{
+
+	if( qca_gpio_get_pin_status(BUTTON ) == 0)
+	{
+		if(buttonValidNum == 0)
+		{
+			qcom_timer_start(&gpio_timer);
+		}
+	}
+}
+
+uint8_t lastButtonState = 1;
+uint8_t lastStateTimeNum = 0;
+
+static void gpio_timer_handle(unsigned int alarm, void *arg)
+{
+    	if( qca_gpio_get_pin_status(BUTTON ) == 1)
+    	{
+    		if(buttonValidNum >0)
+    		{
+	    		if(lastButtonState == 1)
+	    		{
+				lastStateTimeNum ++;
+				if(lastStateTimeNum > 15)
+				{
+					lastStateTimeNum = 0;
+					lastButtonState = 1;
+					waitKeyTimeOverFlag = 1;
+					qcom_timer_stop(&gpio_timer);
+				}
+	    		}else{
+				lastButtonState = 1;
+				lastStateTimeNum = 0;
+	    		}
+    		}else{
+    			lastStateTimeNum = 0;
+			lastButtonState = 1;
+			qcom_timer_stop(&gpio_timer);
+    		}
+  	}else{
+		if(lastButtonState == 0)
+    		{
+			lastStateTimeNum ++;
+			if(lastStateTimeNum > 62)
+			{
+				buttonValidNum = KEY_VALID_NUM_LONG_TIME_SMARTLINK;
+				lastStateTimeNum = 0;
+				lastButtonState = 1;
+				waitKeyTimeOverFlag = 1;
+				qcom_timer_stop(&gpio_timer);
+			}
+    		}else{
+			lastButtonState = 0;
+			lastStateTimeNum = 0;
+			buttonValidNum ++;
+			if(buttonValidNum >= KEY_VALID_NUM_RESET_GW)
+			{
+				buttonValidNum = KEY_VALID_NUM_RESET_GW;
+				lastStateTimeNum = 0;
+				lastButtonState = 1;
+				waitKeyTimeOverFlag = 1;
+				qcom_timer_stop(&gpio_timer);
+			}
+    		}
+  	}
+}
+void button_init(void)
+{
+	qcom_gpio_interrupt_info_t network_button;
+
+       qcom_gpio_pin_pad(BUTTON, QCOM_GPIO_PIN_PULLUP, 0, 0);
+       network_button.pin = BUTTON;
+	network_button.gpio_pin_int_handler_fn = network_button_handler;
+	network_button.arg = NULL;
+	qcom_gpio_interrupt_register(&network_button);
+    	qcom_gpio_pin_dir(BUTTON, 1);
+	qcom_gpio_interrupt_mode(&network_button, QCOM_GPIO_PIN_INT_BOTH_EDGE);
+	qcom_gpio_interrupt_start(&network_button);
+	//qcom_timer_init(&gpio_timer, gpio_timer_handle, NULL, 1500, ONESHOT);
+	//qcom_timer_init(&deshake_timer, gpio_deshake_timer_handle, NULL, 3000, ONESHOT);
+	qcom_timer_init(&gpio_timer, gpio_timer_handle, NULL, 80, PERIODIC);
+}
+
+
+
+
+
+
+void user_manage_button_func(unsigned int arg)
+{
+	button_init();
+	printf("enter user_manage_button_func\r\n");
+	waitKeyTimeOverFlag = 1;
+	uint16_t x,y,r,g,b;
+	uint8_t level;
+	while(1)
+	{
+		if(waitKeyTimeOverFlag == 1)
+		{
+			printf("the key num:%d\r\n",buttonValidNum);
+			switch(buttonValidNum)
+			{
+				case KEY_VALID_NUM_NONE:
+					break;
+				case KEY_VALID_NUM_NORMAL:
+					printf("the test num\r\n");
+					/*test11 ++;
+					if(test11 == 1)
+					{
+						qca_gpio_set_pin_status(ZIGBEE_RESET,0);
+					}else if(test11 >= 2){
+						qca_gpio_set_pin_status(ZIGBEE_RESET,1);
+						test11 = 0;
+					}*/
+					if((beep_info.work_flag == 0) && ((beep_info.work_type == BEEP_ALARM)  || (beep_info.work_type == BEE_SOUND_LOCAL_REGULA)))
+					 {
+						 beep_info.work_type = BEEP_ALARM_SILENCE;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+					 r = 65280;
+					 g = 53248;
+					 b = 0;
+					 hmzColorRgbToXY(r,g,b,&x,&y,&level);
+					 printf("test for rgb,r:%d,g:%d,b:%d,x:%d,y:%d,l:%d\r\n",r,g,b,x,y,level);
+					 r = 0;
+					 g = 0;
+					 b = 0;
+					 hmzColorXYToRgb(x,y,level,&r,&g,&b);
+					 printf("test for rgb,r:%d,g:%d,b:%d,x:%d,y:%d,l:%d\r\n",r,g,b,x,y,level);
+					break;
+				case KEY_VALID_NUM_ZB_MAKE_JOIN:
+					if(gwStateForRealTime.gwZbIsJoining == 0)
+					{
+						userFillUartCmdForPermitJoin(DEFUALT_ZIGBEE_JOINING_TIMERS);
+					}else{
+						userFillUartCmdForPermitJoin(0);
+					}
+					printf("zigbee join key num\r\n");
+					break;
+				case KEY_VALID_NUM_RESET_GW:
+					XlinkReSetSDK();
+					printf("gw reset key num\r\n");
+					userFillUartCmdForSetZCToFactory();
+					qcom_thread_msleep(1500);
+					user_flash_delete_all_node_info();
+					userCheckSaveFlashAndReset(0);
+					break;
+				case KEY_VALID_NUM_LONG_TIME_SMARTLINK:
+					printf("smart link key num\r\n");
+				//	XlinkReSetSDK();//smart link 成功后，reset SDK，取消设备与上一个app的订阅关系
+					DEV_MYSELF_INFO *tempDevInfo = &hmIotsDevInfo;
+					tempDevInfo->wifiInfo.work_mode = LTLINK_MODE;
+				       //qca_save_flash_params(FLASH_BASIC_ADDR + START_ADDR_FLASH_DEV_MYSELF_INFO_OFFSET, (unsigned char *)tempDevInfo, sizeof(DEV_MYSELF_INFO));
+				       userCheckSaveFlashAndReset(1);
+					break;
+				default: break;
+			}
+			buttonValidNum = 0;
+			waitKeyTimeOverFlag = 0;
+		}
+		qcom_thread_msleep(200);
+	}
+}
+
+

@@ -1,0 +1,81 @@
+This module implements a simple ANSI terminal over a UART port available on the SoC.  It can operate
+over the debug UART or any application UART.  Some SoC debug UARTs are non-interrupt driven
+and require timer-based polling.  In order to effectively use the console, the UART must be
+event driven (i.e. interrupts or polled via a timer).
+
+The console module provides an interface for other modules to hook in command handlers.  The handlers
+provide callbacks that use the familiar main() callback : int main (int argc, chat *argv[]) invocation.
+Commands can be hooked in before or after the console is started.  The console comes pre-loaded with
+built-in commands (see list at the end of this document).
+
+In order to allow applications to use the common A_PRINTF facility, the console application replaces
+the debug serial's putc/getc module APIs.  This also redirects all A_PRINTFs calls to the console port.
+To effectively use the console interface with minimal intrusion to the running target, all console outputs
+are sent to an interrupt driven UART driver.  Console prints are buffered to the port and transmitted 
+via interrupts (or polled timer) over UART.  This has some benefits and some consequences:
+ 
+    - Console prints are less intrusive to running firmware.  At 9600 Baud, the previous method for
+      console prints would add 1MS of delay for each character print within the calling path of A_PRINTF.
+    - Console prints are buffered, so be aware that prints can be lost if posted too quickly
+      The console has an optional configuration to size the output buffering appropriately to avoid
+      lost messages.
+    - On a target exception, the A_PRINTF facility reverts back to using the default debug port for
+      exception handler prints to avoid any information loss.  This can be an issue if the console 
+      port is on an application UART and you don't have a setup on the debug port.
+
+
+ANSI Terminal Features:
+=======================
+The console supports some basic VT100 terminal features with the ability to store a command history.
+These are the minimum key bindings: 
+
+   Up Arrow         - cycle up through command history
+   Down Arrow       - cycle down through command history
+   Left/Right Arrow - move cursor through the command line
+   Del              - delete character at the current cursor position
+   BackSpace        - back up cursor and delete character at the new cursor position
+   
+   * note, the cursor is always in insert mode, that is, characters are inserted at the point of the
+     cursor.  To replace a character, use backspace to delete and then insert your character.	
+
+Currently tested with:
+
+    - Tera Term (Windows)
+    - HyperTerminal (Windows)
+    
+Current Defaults:
+=================
+   Debug UART operation (UART0)
+   9600 Baud Rate (can be configured up to 115200), 8-bit, 1 start-bit, no parity, no flow control. 
+   80 character maximum per line
+   4-deep history buffer
+   16 arguments max (including command name), 32-characters per argument.
+   console output buffer is 1024 bytes 
+   * the amount of history buffer and max command line is configurable at initialization.
+   * Defaults can be overridden through a configuration structure when the console is initialized.
+
+Hardware Limitations:
+=====================
+   - Console UART requires core-clock to be active in order to clock the baud rate generator.  A sleeping
+     target will prevent the console from receiving or outputing characters.
+   - On older silicon, the debug UART does not have an interrupt line.  This requires the port driver
+     to use a timer-based polling loop (10 MS). 
+   
+Default Commands :
+==================
+
+   ? - dump command list
+   rd - read memory
+        args:  -a [addr] {-c [count] } {-b | -h | -w}  (-b = byte, -h = half-word, -w = word (default))  
+  		examples >  rd -a 0x4000 
+  		            rd -a 0x400700 -c 100 -b 
+   wr - write memory
+        args:  -a [addr] -d [data]  {-b | -h | -w}  (-b = byte, -h = half-word, -w = word(default))   
+     	examples >  wr -a 0x4000 -d 0x100 
+  		            wr -a 0x400700 -d 1 -b
+  		            
+  		             
+  
+
+   
+   

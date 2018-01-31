@@ -1,0 +1,1672 @@
+
+#include "qcom_common.h"
+#include "ServerDataHandle.h"
+
+#include "../lt_sample/ltm3210.h"
+#include "MQTTPacket.h"
+#include "MQTTinterface.h"
+#include "hm_keyAndSmartLink.h"
+#include "hm_app.h"
+
+#include "hm_network_data_manage.h"
+#include "hm_zigbeeInfohand.h"
+#include "hm_halBeep.h"
+
+#include "aes.h"
+
+//#include "hm_reportDevToCloud.h"
+
+
+
+extern NETWORK_USER_CONFIG network_config_call;
+extern DEV_MYSELF_INFO hmIotsDevInfo;
+DEV_GW_INFO hmIotsinformation;
+extern BEEP_INFO beep_info;
+extern TX_SEMAPHORE beep_semaphore_ptr;
+extern qcom_timer_t gwNightLightTimer;
+extern DEV_NUM_INFO devNumInfo;
+
+
+
+
+//extern DEV_MYSELF_INFO hmIotsDevInfo;
+
+
+
+
+
+void hm_information_init(void)
+{
+	hmIotsinformation.protocolver=0x0002;
+	hmIotsinformation.wifihardwarever=0x0001;
+	hmIotsinformation.wifisoftwarever=0x0001;
+	hmIotsinformation.zigbeever=0x0001;
+}
+char *strupr_a(char*ch)
+{
+   long i,m;
+   for(i=0;i<strlen(ch);i++)
+   {
+      if(*(ch+i)!=0)
+      {
+        m=*(ch+i);
+        if(96<m&&m<123)
+        *(ch+i)=*(ch+i)-32;
+      }
+      else if(*(ch+i)=0)
+         break;
+    }
+    return ch;
+}
+
+void ctoi(unsigned char *c, unsigned char *i) {
+	switch (*c) {
+	case '0':
+		*i |= 0;
+		break;
+	case '1':
+		*i |= 1;
+		break;
+	case '2':
+		*i |= 2;
+		break;
+	case '3':
+		*i |= 3;
+		break;
+	case '4':
+		*i |= 4;
+		break;
+	case '5':
+		*i |= 5;
+		break;
+	case '6':
+		*i |= 6;
+		break;
+	case '7':
+		*i |= 7;
+		break;
+	case '8':
+		*i |= 8;
+		break;
+	case '9':
+		*i |= 9;
+		break;
+	case 'a':
+	case 'A':
+		*i |= 0xa;
+		break;
+	case 'b':
+	case 'B':
+		*i |= 0xb;
+		break;
+	case 'c':
+	case 'C':
+		*i |= 0xc;
+		break;
+	case 'd':
+	case 'D':
+		*i |= 0xd;
+		break;
+	case 'e':
+	case 'E':
+		*i |= 0xe;
+		break;
+	case 'f':
+	case 'F':
+		*i |= 0xf;
+		break;
+	default:
+		break;
+	}
+
+}
+
+void itoc(unsigned char *i, unsigned char *c) {
+	switch (*i) {
+	case 0:
+		*c |= '0';
+		break;
+	case 1:
+		*c |= '1';
+		break;
+	case 2:
+		*c |= '2';
+		break;
+	case 3:
+		*c |= '3';
+		break;
+	case 4:
+		*c |= '4';
+		break;
+	case 5:
+		*c |= '5';
+		break;
+	case 6:
+		*c |= '6';
+		break;
+	case 7:
+		*c |= '7';
+		break;
+	case 8:
+		*c |= '8';
+		break;
+	case 9:
+		*c |= '9';
+		break;
+	case 10:
+		*c |= 'A';
+		break;
+	case 11:
+		*c |= 'B';
+		break;
+	case 12:
+		*c |= 'C';
+		break;
+	case 13:
+		*c |= 'D';
+		break;
+	case 14:
+		*c |= 'E';
+		break;
+	case 15:
+		*c |= 'F';
+		break;
+	default:
+		break;
+	}
+}
+
+int combined_point_datapacket(char actiontype,char action_parm,char encrypt_parm,char datatype,unsigned char* buf,unsigned char* payload, int payloadlen)
+{
+	int length;
+	unsigned char *ptr = buf;
+	uint8_t key[40]={0};
+	uint8_t *ptr_int,*ptr_out;
+	uint16_t ptrint_len,ptrout_len,i,tempdata,convertdata;
+	//char encrypt_mode=0;
+
+	#ifdef ENCRYPT_ENABLE
+	if(encrypt_parm==PRIVATE_ENCRYPT){
+		//encrypt_mode=2;
+		memcpy(key,hmIotsDevInfo.aesKey,strlen(hmIotsDevInfo.aesKey));
+		printf("\n PRIVATE_ENCRYPT:%s --\n",hmIotsDevInfo.aesKey);
+	
+	}else{
+		//encrypt_mode=1;
+		memcpy(key,GW_PUBPLICKEY,strlen(GW_PUBPLICKEY));
+		printf("\n PULIC_ENCRYPT:%s --\n",GW_PUBPLICKEY);
+	}
+	#endif
+	writeChar(&ptr, actiontype);
+	writeChar(&ptr, action_parm);//ENCRYPT_TYPE
+	writeChar(&ptr, ENCRYPT_TYPE);
+	writeChar(&ptr, encrypt_parm);
+	//ptr += MQTTPacket_encode(ptr, rem_len);
+	if(datatype)
+	writeChar(&ptr, datatype);
+
+	if((encrypt_parm) && (payloadlen)){//encrypt_mode
+		printf("\n encrypt_mode!=0----\n");
+		ptr_int = mem_alloc(512);
+		ptr_out = mem_alloc(512);
+
+		ptrint_len=0;
+		memcpy(ptr_int, payload, payloadlen);
+		ptrint_len+=payloadlen;
+		printf("\n pass mingwen keydata:\n");
+		for(i=0;i<ptrint_len;i++)
+		{
+			printf("%02x ",ptr_int[i]);
+		}
+		ptrout_len=user_aes128_encode(ptr_int,ptrint_len,ptr_out,key);		
+
+		writeInt(&ptr, ptrout_len);
+		memcpy(ptr, ptr_out, ptrout_len);
+		ptr += ptrout_len;
+		mem_free(ptr_int);
+		mem_free(ptr_out);		
+	}else{
+	if(payloadlen){
+		//writeChar(&ptr, payloadlen);
+		writeInt(&ptr, payloadlen);
+		memcpy(ptr, payload, payloadlen);
+		ptr += payloadlen;
+	}
+	}
+	length = ptr - buf;
+	return length;
+}
+
+int combined_pass_datapacket(int transport_type,int cmd_parm,unsigned char* buf,unsigned char* payload, int payloadlen)
+{
+	int length;
+	unsigned char *ptr = buf;
+	char encrypt_mode=0;
+	uint8_t key[40]={0};
+	uint8_t ExpressData[512];
+	unsigned char *ptr_ex=ExpressData;
+	uint8_t *ptr_int,*ptr_out;
+	uint16_t ptrint_len,ptrout_len,i,tempdata,convertdata;
+	uint8_t temp_buff[3];
+	
+//add
+	#ifdef ENCRYPT_ENABLE
+		encrypt_mode=2;
+		memcpy(key,hmIotsDevInfo.aesKey,strlen(hmIotsDevInfo.aesKey));
+	#endif
+	if(cmd_parm == GETAESKEY_CMD)
+	{
+		encrypt_mode=PUBLICKEY_MODE;
+		memset(key,0,sizeof(key));
+		memcpy(key,GW_PUBPLICKEY,strlen(GW_PUBPLICKEY));
+		printf("GW_PUBPLICKEY encrypt key--\n");
+	}
+
+	writeChar(&ptr, ACTION);//action
+	writeChar(&ptr, CONTROL_ACK);//ENCRYPT_TYPE
+	writeChar(&ptr, ENCRYPT_TYPE);
+	writeChar(&ptr, encrypt_mode);
+	writeChar(&ptr, PASS);
+
+	if(encrypt_mode)
+	{
+		ptr_int = mem_alloc(512);
+		ptr_out = mem_alloc(512);
+		ptrint_len=0;
+		//tempdata=transport_type;
+		big_little_exchange(transport_type,&convertdata);
+		//temp_buff=(uint8_t *)&transport_type;
+		memcpy(ptr_int, &convertdata, 2);ptrint_len+=2;
+		tempdata=DESTINATIONID;
+		big_little_exchange(DESTINATIONID,&convertdata);
+		memcpy(ptr_int+ptrint_len, &convertdata, 2);ptrint_len+=2;
+		tempdata=SOURCEID_TOAPP;
+		big_little_exchange(SOURCEID_TOAPP,&convertdata);
+		memcpy(ptr_int+ptrint_len, &convertdata, 2);ptrint_len+=2;
+		tempdata=SN_COUNTS;
+		big_little_exchange(SN_COUNTS,&convertdata);
+		memcpy(ptr_int+ptrint_len, &convertdata, 2);ptrint_len+=2;
+		tempdata=cmd_parm;
+		big_little_exchange(cmd_parm,&convertdata);
+		memcpy(ptr_int+ptrint_len, &convertdata, 2);ptrint_len+=2;
+		tempdata=payloadlen;
+		big_little_exchange(payloadlen,&convertdata);
+		memcpy(ptr_int+ptrint_len, &convertdata, 2);ptrint_len+=2;	
+		memcpy(ptr_int+ptrint_len, payload, payloadlen);
+		ptrint_len += payloadlen;
+		printf("\n pass keydata:");
+		for(i=0;i<ptrint_len;i++)
+		{
+			printf("%02x ",ptr_int[i]);
+		}
+		
+		//ptrint_len = 12+payloadlen;
+		ptrout_len=user_aes128_encode(ptr_int,ptrint_len,ptr_out,key);
+
+		writeInt(&ptr, ptrout_len);
+		memcpy(ptr, ptr_out, ptrout_len);
+		ptr += ptrout_len;
+		mem_free(ptr_int);
+		mem_free(ptr_out);
+	}else{
+	//if(GETAESKEY_CMD!=cmd_parm)
+	writeInt(&ptr, payloadlen+12);//12	
+	writeInt(&ptr, transport_type);//writeInt(&ptr, INFORMATIONTYPE); //REPORTINFOTYPE
+	writeInt(&ptr, DESTINATIONID);
+	writeInt(&ptr, SOURCEID_TOAPP);
+	writeInt(&ptr, SN_COUNTS);
+	writeInt(&ptr, cmd_parm);
+	
+	writeInt(&ptr, payloadlen);
+	memcpy(ptr, payload, payloadlen);
+	ptr += payloadlen;
+	}
+
+	length = ptr - buf;
+	return length;
+}
+
+int combined_list_datapacket(char action_mode,unsigned char* buf,unsigned char* payload, int payloadlen)
+{
+	int length;
+	unsigned char *ptr = buf;
+	uint8_t key[40]={0};
+	char encrypt_mode=0;
+	uint8_t *ptr_int,*ptr_out;
+	uint16_t ptrint_len,ptrout_len,i;
+//add
+	#ifdef ENCRYPT_ENABLE
+		encrypt_mode=2;
+	#endif
+
+	writeChar(&ptr, ACTION);//action
+	writeChar(&ptr, SENDLIST);//ENCRYPT_TYPE
+	writeChar(&ptr, ENCRYPT_TYPE);
+	writeChar(&ptr, encrypt_mode);
+	writeChar(&ptr, LIST_KEY);
+
+	if(encrypt_mode){
+		ptr_int = mem_alloc(512);
+		ptr_out = mem_alloc(512);
+		
+		ptrint_len=0;
+		memset(key,0,sizeof(key));
+		memcpy(key,hmIotsDevInfo.aesKey,strlen(hmIotsDevInfo.aesKey));
+		memcpy(ptr_int+ptrint_len, payload, payloadlen);
+		ptrint_len += payloadlen;
+		printf("\n pass mingwen keydata:\n");
+		for(i=0;i<ptrint_len;i++)
+		{
+			printf("%02x ",ptr_int[i]);
+		}
+		ptrout_len=user_aes128_encode(ptr_int,ptrint_len,ptr_out,key);
+		printf("\n pass mingwen ptrout_len:%d,%x",ptrout_len,ptrout_len);
+		writeInt(&ptr, ptrout_len);
+		memcpy(ptr, ptr_out, ptrout_len);
+		ptr += ptrout_len;
+		mem_free(ptr_int);
+		mem_free(ptr_out);
+	}else{
+	writeInt(&ptr, payloadlen);//12
+	//writeInt(&ptr, payloadlen);
+	memcpy(ptr, payload, payloadlen);
+	ptr += payloadlen;
+	}
+
+	length = ptr - buf;
+	return length;
+}
+
+int combined_pass_datapacket_1(int cmd_parm,unsigned char* buf,unsigned char* payload, int payloadlen)//Transport type
+{
+	int length;
+	unsigned char *ptr = buf;
+	
+	writeInt(&ptr, INFORMATIONTYPE);
+	writeInt(&ptr, DESTINATIONID);
+	writeInt(&ptr, SOURCEID_TOAPP);
+	writeInt(&ptr, SN_COUNTS);
+	writeInt(&ptr, cmd_parm);
+
+	writeInt(&ptr, payloadlen);
+	memcpy(ptr, payload, payloadlen);
+	ptr += payloadlen;
+
+	length = ptr - buf;
+	return length;
+}
+void big_little_exchange(int sdata,int *edata)
+{
+	uint8_t temp_data=0;
+	uint16_t data=0;
+	temp_data=sdata&0xff;
+	sdata=(sdata>>8)&0xff;
+	data=temp_data<<8;
+	*edata=(data)|sdata;
+}
+void Int_biglittle_Convert(int sdata,int *edata)
+{
+	int k = sdata;
+	char *p = (char*)&k;
+	uint32_t temp_data1=0,temp_data2=0,temp_data3=0,temp_data4=0;
+	//temp_data0=(sdata<<24)&0xff000000;
+	temp_data1=(unsigned int)(*p)<<24;
+    temp_data2=((unsigned int)*(p+1))<<16;
+    temp_data3=((unsigned int)*(p+2))<<8;
+    temp_data4=((unsigned int)*(p+3));
+	*edata=temp_data1 + temp_data2 +temp_data3+temp_data4;
+}
+
+//设备版本信息获取//
+void sent_pass_mesgdata(void)
+{
+	uint8_t buff[512];
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata=0;
+	uint8_t temp_buff[3] = { 0 },factoryID_buff[5]={0},i;
+	int id_value;
+	
+	ptr = mem_alloc(512);
+	big_little_exchange(rc,&convertdata);
+	memcpy(ptr,&convertdata,2);
+	ptrlen+=2;
+	//hmIotsDevInfo.wifiMac
+	memcpy(ptr+ptrlen,hmIotsDevInfo.wifiMac,6);
+	ptrlen+=6;
+	//hmIotsinformation.wifisoftwarever
+	big_little_exchange(hmIotsinformation.wifisoftwarever,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	big_little_exchange(hmIotsDevInfo.time_zones,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	//hmIotsDevInfo.time_zones
+	
+	/*for(i=0;i<4;i++)
+	{
+		id_value=id_value<<4;
+		ctoi(&network_config_call.factory_id[i],&id_value);
+	}
+	big_little_exchange(id_value,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	id_value=0;
+	for(i=0;i<6;i++)
+	{
+		id_value=id_value<<4;
+		ctoi(&network_config_call.product_id[5-i],&id_value);
+	}
+	memcpy(ptr+ptrlen,&id_value,3);
+	ptrlen+=3;*/
+	//sprintf();
+	//id_value=(int)FACTORYID;//sprintf(id_value,"%c",FACTORYID);
+	id_value=0;
+	id_value=(network_config_call.factory_id[0]-0x30)*1000+(network_config_call.factory_id[1]-0x30)*100\
+			+(network_config_call.factory_id[2]-0x30)*10+(network_config_call.factory_id[3]-0x30);
+	big_little_exchange(id_value,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	id_value=0;
+	memcpy(ptr+ptrlen,&id_value,1);
+	ptrlen+=1;
+	id_value=(int)PRODUCTID;//sprintf(id_value,"%c",PRODUCTID);
+	id_value=(network_config_call.product_id[0]-0x30)*10000+(network_config_call.product_id[1]-0x30)*1000\
+			+(network_config_call.product_id[2]-0x30)*100+(network_config_call.product_id[3]-0x30)*10+(network_config_call.product_id[4]-0x30);
+	big_little_exchange(id_value,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+
+	
+	big_little_exchange(hmIotsinformation.wifihardwarever,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	big_little_exchange(hmIotsinformation.protocolver,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	big_little_exchange(hmIotsinformation.zigbeever,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	bufflen=combined_pass_datapacket(INFORMATIONTYPE,GETMESG_CMD,buff,ptr,ptrlen);//bufflen=combined_pass_datapacket(GETMESG_CMD,buff,"123",3);
+	mem_free(ptr);
+	//sprintf(topic1_buff,"%s/%s/%s/b",network_config_call.factory_id,network_config_call.product_id,network_config_call.mac);
+	Sent_pass_data(buff,bufflen);
+}
+
+//应答服务器pass数据 data ack返回//
+void pass_ack_data(int cmddata,char* data,int data_len)
+{
+	uint8_t buff[512];
+	uint8_t *ptr=data;
+	uint16_t rc=0x0001,bufflen,convertdata=0;
+	//char encrypt_mode=0;
+//add
+	#ifdef ENCRYPT_ENABLE
+		//encrypt_mode=2;
+	#endif
+	//add
+	//writeChar(&ptr, ACTION);//action
+	//writeChar(&ptr, CONTROL_ACK);//ENCRYPT_TYPE
+//	writeChar(&ptr, ENCRYPT_TYPE);
+	//writeChar(&ptr, encrypt_mode);
+	
+	//ptr = mem_alloc(512);
+	big_little_exchange(rc,&convertdata);
+	memcpy(ptr,&convertdata,2);
+	printf("pass_ack_data\n ");
+	printf("%02x%02x ",ptr[0],ptr[1]);
+	//bufflen=combined_pass_datapacket(INFORMATIONTYPE,cmddata,buff,ptr,data_len);
+	//bufflen=combined_pass_datapacket_1(cmddata,buff,ptr,data_len);
+	//bufflen=combined_pass_datapacket(cmddata,buff,ptr,data_len);//bufflen=combined_pass_datapacket(INFORMATIONTYPE,GETZBSINGLESS_CMD,buff,ptr,ptrlen);
+	bufflen=combined_pass_datapacket(INFORMATIONTYPE,cmddata,buff,ptr,data_len);
+	//mem_free(ptr);
+	//memcpy(buff,"123450",6);bufflen=6;
+	printf("pass_ack_data bufflen=%x\n ",bufflen);
+	Sent_pass_data(buff,bufflen);
+}
+
+//网关参数设置处理//
+void set_gateway_parm(char* data,int data_len)
+{
+	uint8_t *ptr=data;
+	uint8_t data_buff[9],i;
+	uint16_t enable_flag,movedata=0x0001;
+	uint8_t needSaveFlashFlag = 0;
+	uint8_t temp_data;
+	enable_flag=(ptr[2]<<8)+ptr[3];
+	Loginfo("set_gateway_parm enable_flag=%x\n",enable_flag);
+	memcpy(data_buff,&ptr[4],data_len-4);
+	for(i=0;i<8;i++)
+	{
+		if(enable_flag & movedata)
+		{
+			switch(i)
+			{
+				case 0:
+					Loginfo("set_gateway_parm Alarmlevel,=%d,%x\n",i,data_buff[i]);//NULL
+					needSaveFlashFlag = 1;
+					break;
+				case 1:
+					Loginfo("set_gateway_parm Soundlevel=%d,%x\n",i,data_buff[i]);
+					hmIotsDevInfo.sound_level=data_buff[i];
+				 	needSaveFlashFlag = 1;
+						if(beep_info.work_flag == 0) 
+					 {
+					 	 beep_info.value = hmIotsDevInfo.sound_level;
+						 beep_info.work_type = BEEP_SOUND_REGULA;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+				 
+				 //devOption.GWStat.alarmlevel = 1;
+					break;
+				case 2:
+					Loginfo("set_gateway_parm Betimer=%d,%x\n",i,data_buff[i]);
+					hmIotsDevInfo.beep_alarm_times=data_buff[i];
+					needSaveFlashFlag = 1;
+						if(beep_info.work_flag == 0) 
+					 {
+						 beep_info.work_type = BEEP_ALARM_TIMER_CHANGE;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+				 
+				 //devOption.GWStat.betimer = 1;
+					break;
+				case 3:
+					Loginfo("set_gateway_parm Gwlanguage=%d,%x\n",i,data_buff[i]);
+					hmIotsDevInfo.app_language=data_buff[i];
+					needSaveFlashFlag = 1;
+					break;
+				case 4:
+					Loginfo("set_gateway_parm Gwlightlevel=%d,%x\n",i,data_buff[i]);
+					hmIotsDevInfo.light_level=data_buff[i];
+					needSaveFlashFlag = 1;
+					userControlGWLedFunc(1,3);
+					//devOption.GWStat.gwlightlevel = 1;
+					break;
+				case 5:
+					Loginfo("set_gateway_parm Gwlightonoff=%d,%x\n",i,data_buff[i]);
+					hmIotsDevInfo.light_onoff=data_buff[i];
+					needSaveFlashFlag = 1;
+					userControlGWLedFunc(hmIotsDevInfo.light_onoff,0);
+					//devOption.GWStat.gwlightonoff = 1;
+					break;
+				case 6:
+					Loginfo("set_gateway_parm Lgtimer=%d,%x\n",i,data_buff[i]);
+					hmIotsDevInfo.light_on_times=data_buff[i];
+					needSaveFlashFlag = 1;
+					//hmIotsDevInfo.light_on_times = objs->valueint;
+					qcom_timer_delete(&gwNightLightTimer);
+					qcom_timer_init(&gwNightLightTimer, lightNight_timerS_handle, NULL, hmIotsDevInfo.light_on_times * 1000, ONESHOT);
+					//needSaveFlashFlag = 1;
+					break;
+				case 7:
+					Loginfo("set_gateway_parm Armtype=%d,%x\n",i,data_buff[i]);
+					hmIotsDevInfo.sensor_arm_type=data_buff[i];
+					//needSaveFlashFlag = 1;
+					temp_data=data_buff[i];
+					if(temp_data == SENSOR_DISARM){
+					hmSetAllSensorDisarm();
+					if(beep_info.work_flag == 0 )
+					 {
+						 beep_info.work_type = BEEP_DISARM;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+					 if(hmIotsDevInfo.sensor_arm_type != SENSOR_DISARM)
+					 {
+						 hmIotsDevInfo.sensor_arm_type = SENSOR_DISARM;
+						 needSaveFlashFlag = 1;
+					 }
+				}else if(temp_data == SENSOR_HOME_ARM){
+					hmSetAllSensorHomeArm();
+					if((beep_info.work_flag == 0) && ((beep_info.work_type != BEEP_ALARM) && (beep_info.work_type != BEE_SOUND_LOCAL_REGULA)) )
+					 {
+						 beep_info.work_type = BEEP_HOME_ARM;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+					if(hmIotsDevInfo.sensor_arm_type != SENSOR_HOME_ARM)
+					 {
+						 hmIotsDevInfo.sensor_arm_type = SENSOR_HOME_ARM;
+						 needSaveFlashFlag = 1;
+					 }
+				}else if(temp_data == SENSOR_ARM){
+					hmSetAllSensorArm();
+					if((beep_info.work_flag == 0) && ((beep_info.work_type != BEEP_ALARM) && (beep_info.work_type != BEE_SOUND_LOCAL_REGULA)))
+					 {
+						 beep_info.work_type = BEEP_ARM;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+					if(hmIotsDevInfo.sensor_arm_type != SENSOR_ARM)
+					 {
+						 hmIotsDevInfo.sensor_arm_type = SENSOR_ARM;
+						 needSaveFlashFlag = 1;
+					 }
+				}else{
+					printf("-----the arm mode is not valid\r\n");
+					//*rc = APP_CMD_RC_ERROR_PARAMETER;
+					//return 1;
+				}
+				hmIotsDevInfo.sensor_arm_type = temp_data;
+				//devOption.GWStat.armtype = 1;
+					break;
+			}
+		}
+		movedata<<=1;
+	}
+	if((beep_info.work_flag == 0) && ((beep_info.work_type != BEEP_ALARM) && (beep_info.work_type != BEE_SOUND_LOCAL_REGULA)))
+	{
+		beep_info.work_type = BEEP_LANGUAGE_SET;
+		beep_info.work_flag = 1;
+		tx_semaphore_put(&beep_semaphore_ptr);
+	}
+	 //devOption.GWStat.gwlanguage = 1;
+	if(needSaveFlashFlag == 1)
+	{
+			userFlashWriteSysInfoFunc((uint8_t*)&hmIotsDevInfo);	
+	}
+
+}
+void get_gateway_parm(void)//char* data,int data_len
+{
+	uint8_t *ptr=NULL;
+	uint8_t data_buff[9],i;
+	uint16_t enable_flag,movedata=0x0001,rc=0x0001,enable_data=0x00ff;
+	uint8_t needSaveFlashFlag = 0;
+	uint8_t sent_buff[256],sent_buff_len,ptrlen;
+	uint8_t alarmlevel=0x40;
+	uint32_t convertdata;
+
+	ptr = mem_alloc(512);
+	big_little_exchange(rc,&convertdata);
+	memcpy(ptr,&convertdata,2);
+	ptrlen+=2;
+	big_little_exchange(enable_data,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	memcpy(ptr+ptrlen,&alarmlevel,1);
+	ptrlen+=1;
+	memcpy(ptr+ptrlen,&hmIotsDevInfo.sound_level,1);
+	ptrlen+=1;
+	memcpy(ptr+ptrlen,&hmIotsDevInfo.beep_alarm_times,1);
+	ptrlen+=1;
+	memcpy(ptr+ptrlen,&hmIotsDevInfo.app_language,1);
+	ptrlen+=1;
+
+	memcpy(ptr+ptrlen,&hmIotsDevInfo.light_level,1);
+	ptrlen+=1;
+	memcpy(ptr+ptrlen,&hmIotsDevInfo.light_onoff,1);
+	ptrlen+=1;
+	memcpy(ptr+ptrlen,&hmIotsDevInfo.light_on_times,1);
+	ptrlen+=1;
+	memcpy(ptr+ptrlen,&hmIotsDevInfo.sensor_arm_type,1);
+	ptrlen+=1;
+	
+	sent_buff_len=combined_pass_datapacket(INFORMATIONTYPE,GETGWPARM_CMD,sent_buff,ptr,ptrlen);
+	Sent_pass_data(sent_buff,sent_buff_len);
+	mem_free(ptr);
+}
+void respond_pass_aeskey(int cmddata)
+{
+	uint8_t buff[512];
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	uint32_t key_buff[2]={0x12345665,0},keybuff1=0x12341234;
+	uint8_t  keybuff[16]={0x12,0x34,0x56,0x65};//hmIotsDevInfo.aesKey
+	ptr = mem_alloc(512);
+	big_little_exchange(rc,&convertdata);
+	memcpy(ptr,&convertdata,2);
+	ptrlen+=2;
+	//memcpy(ptr+ptrlen,key_buff[0],strlen(key_buff[0]));//keybuff
+//	memcpy(ptr+ptrlen,keybuff,strlen(keybuff));
+//	ptrlen+=strlen(keybuff);//hmIotsDevInfo.aesKey
+
+	memcpy(ptr+ptrlen,hmIotsDevInfo.aesKey,strlen(hmIotsDevInfo.aesKey));
+	ptrlen+=strlen(hmIotsDevInfo.aesKey);
+	printf("--------hmIotsDevInfo.aesKey=%s \n",hmIotsDevInfo.aesKey);
+	bufflen=combined_pass_datapacket(INFORMATIONTYPE,cmddata,buff,ptr,ptrlen);
+	mem_free(ptr);
+	Sent_pass_data(buff,bufflen);
+}
+//上报key到point数据
+void sent_point_aeskey(void)
+{
+	uint8_t buff[512],temp_data,key[64]={0};
+	uint8_t *ptr=NULL,*ptr_out=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,ptrout_len=0,convertdata,aeskey_len,i;
+	uint32_t convert_intdata;
+	uint32_t temp_deviceid;
+	ptr = mem_alloc(512);
+	temp_data=DEVICEID_KEY;
+	memcpy(ptr,&temp_data,1);
+	ptrlen+=1;
+	Int_biglittle_Convert(network_config_call.server_deviceid,&convert_intdata);
+	memcpy(ptr+ptrlen,&convert_intdata,4);
+	ptrlen+=4;
+	temp_data=SECRET_KEY;
+	memcpy(ptr+ptrlen,&temp_data,1);
+	ptrlen+=1;
+	aeskey_len=strlen(hmIotsDevInfo.aesKey);
+	big_little_exchange(aeskey_len,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	memcpy(ptr+ptrlen,hmIotsDevInfo.aesKey,strlen(hmIotsDevInfo.aesKey));
+	ptrlen+=aeskey_len;
+	//加密
+	//memcpy(key,XLINK_PRODUCT_KEY,strlen(GW_PUBPLICKEY));//GW_PUBPLICKEY
+	//user_aes_encode(hmIotsDevInfo.aesKey,16,&tempData[1],key);
+	ptr_out = mem_alloc(512);
+	memcpy(key,GW_PUBPLICKEY,strlen(GW_PUBPLICKEY));
+	printf("key=%s\n",key);
+	/*ptrout_len=user_aes128_encode(ptr,ptrlen,ptr_out,key);
+	printf("\n PUBPLICKEY output logdata:");
+	for(i=0;i<ptrout_len;i++){
+	printf("%02X ",ptr_out[i]);
+	}*/
+	//bufflen=combined_point_datapacket(ACTION,SENDKEY,PULIC_ENCRYPT,POINT,buff,ptr_out,ptrout_len);//PULIC_ENCRYPT NO_ENCRYPT
+	bufflen=combined_point_datapacket(ACTION,SENDKEY,PULIC_ENCRYPT,POINT,buff,ptr,ptrlen);
+	
+	//bufflen=combined_point_datapacket(ACTION,SENDKEY,NO_ENCRYPT,POINT,buff,ptr,ptrlen);//POINT
+	printf("------- report_zb_pointdata  \r\n");
+	Sent_point_data(buff,bufflen);
+	mem_free(ptr);
+	mem_free(ptr_out);
+}
+//主动上报zigbee设备入网成功//
+void report_zb_intonetwork(HM_DEV_RAM_LIST *pni,unsigned char* payload, int payloadlen)
+{
+	uint8_t buff[512];
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	uint32_t temp_deviceid;
+	ptr = mem_alloc(512);
+	
+	big_little_exchange(rc,&convertdata);
+	memcpy(ptr,&convertdata,2);
+	ptrlen+=2;
+	big_little_exchange(pni->index,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	big_little_exchange(pni->devType,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;//mac[ZIGBEE_MAC_LEN];
+	memcpy(ptr+ptrlen,pni->mac,8);
+	ptrlen+=8;
+	memcpy(ptr+ptrlen,payload,payloadlen);
+	ptrlen+=payloadlen;
+	bufflen=combined_pass_datapacket(REPORTINFOTYPE,ZBINTOSS_CMD,buff,ptr,ptrlen);
+	Sent_pass_data(buff,bufflen);
+	mem_free(ptr);
+
+	//network_config_call.server_deviceid=0x00000001;
+	temp_deviceid=0x00010001;
+	sent_zigbeelist_msg(pni,ADD_ZIGBEE_MODE,network_config_call.server_deviceid,1);//server_deviceid
+//ZBINTOSS_CMD
+}//total——counts
+
+//主动上报zigbee的 point data //
+void report_zb_pointdata(HM_DEV_RAM_LIST *pni,unsigned char* payload, int payloadlen)
+{
+	uint8_t buff[512],temp_data;
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	uint32_t convert_intdata;
+	uint32_t temp_deviceid;
+	uint8_t encrypt_mode=NO_ENCRYPT;
+
+	#ifdef ENCRYPT_ENABLE
+	encrypt_mode=PRIVATE_ENCRYPT;
+	#endif
+	ptr = mem_alloc(512);
+	temp_data=DEVICEID_KEY;
+	memcpy(ptr,&temp_data,1);
+	ptrlen+=1;
+	Int_biglittle_Convert(network_config_call.server_deviceid,&convert_intdata);
+	memcpy(ptr+ptrlen,&convert_intdata,4);
+	ptrlen+=4;
+
+	temp_data=SUB_INDEX_KEY;
+	memcpy(ptr+ptrlen,&temp_data,1);
+	ptrlen+=1;
+	big_little_exchange(pni->index,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	
+	//memcpy(ptr+ptrlen,&payloadlen,2);
+	//ptrlen+=2;
+	memcpy(ptr+ptrlen,payload,payloadlen);
+	ptrlen+=payloadlen;
+	//bufflen=combined_pass_datapacket(REPORTINFOTYPE,ZBINTOSS_CMD,buff,ptr,ptrlen);
+	
+	bufflen=combined_point_datapacket(ACTION,REPORT,encrypt_mode,POINT,buff,ptr,ptrlen);//NO_ENCRYPT
+	printf("------- report_zb_pointdata  \r\n");
+	Sent_point_data(buff,bufflen);
+	mem_free(ptr);
+
+}
+
+
+//发送zigbee子设备的SS//
+void sent_zigbee_SSstate(HM_DEV_RAM_LIST *pni,unsigned char* payload, int payloadlen)
+{
+	uint8_t buff[512];
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	ptr = mem_alloc(512);
+	
+	big_little_exchange(rc,&convertdata);
+	memcpy(ptr,&convertdata,2);//
+	ptrlen+=2;
+	big_little_exchange(pni->index,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);//
+	ptrlen+=2;
+	/*big_little_exchange(pni->devType,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	memcpy(ptr+ptrlen,pni->mac,8);
+	ptrlen+=8;*/
+	memcpy(ptr+ptrlen,payload,payloadlen);
+	ptrlen+=payloadlen;
+	bufflen=combined_pass_datapacket(INFORMATIONTYPE,GETONEZBSS_CMD,buff,ptr,ptrlen);
+	Sent_pass_data(buff,bufflen);
+	mem_free(ptr);
+}
+//发送zigbee子设备的单项状态值SS//
+void sent_zigbee_SingleSS(HM_DEV_RAM_LIST *pni,unsigned char* payload, int payloadlen)
+{
+	uint8_t buff[512];
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	
+	ptr = mem_alloc(512);
+	big_little_exchange(rc,&convertdata);
+	memcpy(ptr,&rc,2);
+	ptrlen+=2;
+	big_little_exchange(pni->index,&convertdata);
+	memcpy(ptr+ptrlen,&pni->index,2);
+	ptrlen+=2;
+	/*big_little_exchange(pni->devType,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	memcpy(ptr+ptrlen,pni->mac,8);
+	ptrlen+=8;*/
+	memcpy(ptr+ptrlen,payload,payloadlen);
+	ptrlen+=payloadlen;
+	bufflen=combined_pass_datapacket(INFORMATIONTYPE,GETZBSINGLESS_CMD,buff,ptr,ptrlen);
+	Sent_pass_data(buff,bufflen);
+	mem_free(ptr);
+
+}
+//发送zigbee子设备的SE//
+void sent_zigbee_SEsetting(HM_DEV_RAM_LIST *pni,unsigned char* payload, int payloadlen)
+{
+	uint8_t buff[512];
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	ptr = mem_alloc(512);
+	
+	//big_little_exchange(rc,&convertdata);
+	memcpy(ptr,&rc,2);
+	ptrlen+=2;
+	//big_little_exchange(pni->index,&convertdata);
+	memcpy(ptr+ptrlen,&pni->index,2);
+	ptrlen+=2;
+	/*big_little_exchange(pni->devType,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	memcpy(ptr+ptrlen,pni->mac,8);
+	ptrlen+=8;*/
+	memcpy(ptr+ptrlen,payload,payloadlen);
+	ptrlen+=payloadlen;
+	bufflen=combined_pass_datapacket(INFORMATIONTYPE,GETZBSE_CMD,buff,ptr,ptrlen);
+	Sent_pass_data(buff,bufflen);
+	mem_free(ptr);
+}
+
+
+//上报服务器list主题，zigbee操作：添加，删除，上传//
+void sent_zigbeelist_msg(HM_DEV_RAM_LIST *pni,unsigned char type_mode,unsigned int server_deviceid,unsigned char total_counts)
+{
+	uint8_t buff[512],i=0;
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	uint32_t temp_id;
+	int	convert_intdata;
+	ptr = mem_alloc(512);
+	memcpy(ptr,&total_counts,1);
+	ptrlen+=1;
+	if(total_counts==1){
+	i+=1;
+	memcpy(ptr+ptrlen,&i,1);
+	ptrlen+=1;
+	Loginfo("\n sent_zigbeelist_msg -----------01:\r\n");
+	memcpy(ptr+ptrlen,&type_mode,1);
+	ptrlen+=1;
+	if(server_deviceid==1){
+		temp_id=network_config_call.server_deviceid;
+		Int_biglittle_Convert(temp_id,&convert_intdata);
+		memcpy(ptr+ptrlen,&convert_intdata,4);
+		ptrlen+=4;
+	}
+	else{
+	Int_biglittle_Convert(server_deviceid,&convert_intdata);
+	memcpy(ptr+ptrlen,&convert_intdata,4);
+	ptrlen+=4;
+	}
+	Loginfo("\n sent_zigbeelist_msg -----------01:\r\n");
+	big_little_exchange(pni->index,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	big_little_exchange(pni->devType,&convertdata);
+	memcpy(ptr+ptrlen,&convertdata,2);
+	ptrlen+=2;
+	memcpy(ptr+ptrlen,pni->mac,8);
+	ptrlen+=8;
+
+	memcpy(ptr+ptrlen,&pni->onLine,1);//add
+	ptrlen+=1;
+	}
+	Loginfo("\n sent_zigbeelist_msg -----------03\r\n");
+	bufflen=combined_list_datapacket(ADD_ZIGBEE_MODE,buff,ptr,ptrlen);
+	Sent_list_data(buff,bufflen);
+	mem_free(ptr);
+}
+
+//主动上报zigbee设备报警数据pass, //
+void report_zb_alarmMsg_1(unsigned char* payload, int payloadlen)
+{
+	uint8_t buff[512];
+	uint8_t temp_buff[128]={0},tempbuff_len,alarm_data,tamper_data;
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	uint16_t index,tempdata,product_devType;
+	uint32_t convert_intdata;
+
+
+	//HM_DEV_RAM_LIST *pni_temp;
+	/*
+	ptr = mem_alloc(512);
+	memcpy(ptr,payload,payloadlen);
+	ptrlen+=payloadlen;
+	bufflen=combined_pass_datapacket(REPORTINFOTYPE,GETONEZBSS_CMD,buff,ptr,ptrlen);
+	Sent_pass_data(buff,bufflen);
+	mem_free(ptr);*/
+	//ptr = mem_alloc(512);
+	
+	tempbuff_len=0;
+	memcpy(temp_buff,payload,payloadlen);
+	tempbuff_len+=payloadlen;
+	product_devType=(temp_buff[4]<<8)+temp_buff[5];
+	
+	bufflen=combined_pass_datapacket(REPORTINFOTYPE,GETONEZBSS_CMD,buff,temp_buff,tempbuff_len);
+	Sent_pass_data(buff,bufflen);
+	//index=(temp_buff[2]<<8)+temp_buff[1];
+
+	//sent point
+	// deviceid index alarmdata
+	memset(buff,0,sizeof(buff));
+	ptr = mem_alloc(512);ptrlen=0;
+	tempdata=DEVICEID_KEY;
+	memcpy(ptr,&tempdata,1);ptrlen+=1;
+	Int_biglittle_Convert(network_config_call.server_deviceid,&convert_intdata);
+	memcpy(ptr+ptrlen,&convert_intdata,4);
+	ptrlen+=4;
+	tempdata=SUB_INDEX_KEY;
+	memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+	memcpy(ptr+ptrlen,&temp_buff[2],2);ptrlen+=2;//
+	
+	alarm_data=temp_buff[14]>>2;
+	Loginfo("\n ----------report_zb_alarmMsg  alarm_data:%x  ==\r\n",alarm_data);
+
+		switch(product_devType)
+	{
+		case NODE_INFO_TYPE_LIGHT_RGB:
+		case NODE_INFO_TYPE_AI1SW:
+		case NODE_INFO_TYPE_AI2SW:
+		case NODE_INFO_TYPE_AI3SW:
+			if(1)//if(alarm_data == SUB_DEV_OFFLINE)
+			{
+				tempdata=OL_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=0;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			break;
+		case NODE_INFO_TYPE_MAGNET_DOOR:
+		case NODE_INFO_TYPE_WATER_SENSOR:
+		case NODE_INFO_TYPE_PIR_SENSOR:
+		case NODE_INFO_TYPE_VIBRATION:
+			//if(alarm_data == TAMPER_AND_ALARM_RESUME || alarm_data == TAMPER_AND_ALARM || alarm_data == ALARM_RESUME || \
+			//	alarm_data == ALARM)
+			if(1)
+			{
+			tempdata=REMOVE_KEY;
+			memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+			tamper_data=(alarm_data>>1)&0x01; //1
+			if(tamper_data)
+				Loginfo("\n ----------report_zb_alarmMsg REMOVE_KEY=== 1\r\n");
+			//alarm_data=alarm_data>>1;
+			memcpy(ptr+ptrlen,&tamper_data,1);ptrlen+=1;
+			tempdata=OP_KEY;
+			memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+			alarm_data=(alarm_data)&0x01;
+			if(alarm_data)
+				Loginfo("\n ----------report_zb_alarmMsg alarm_data=== 01\r\n");
+			memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			//else if(alarm_data == BATTERY_LOW_ALARM)
+			{			
+				tempdata=BA_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=1;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			//else if(alarm_data == SUB_DEV_OFFLINE)
+			{
+				tempdata=OL_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=0;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			break;
+		case NODE_INFO_TYPE_SMOKE_SENSOR:
+		case NODE_INFO_TYPE_GAS_SENSOR:
+		case NODE_INFO_TYPE_CO_SENSOR:
+		case NODE_INFO_TYPE_SOS:
+			if(1)//if(alarm_data == ALARM_RESUME || alarm_data == ALARM )
+			{
+			tempdata=OP_KEY;//OF_KEY
+			memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+			alarm_data=(alarm_data>>2)&0x03;
+			if(alarm_data)
+				Loginfo("\n ----------report_zb_alarmMsg alarm_data=== 01\r\n");
+			memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			//else if(alarm_data == BATTERY_LOW_ALARM)
+			{
+				tempdata=BA_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=1;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			//else if(alarm_data == SUB_DEV_OFFLINE)
+			{
+				tempdata=OL_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=0;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			break;
+		case NODE_INFO_TYPE_TEMP_HUM_SENSOR:
+			
+			break;
+		case NODE_INFO_TYPE_WARNING_DEV:
+			//if(alarm_data == BATTERY_LOW_ALARM)
+			{			
+				tempdata=BA_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=1;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			//else if(alarm_data == SUB_DEV_OFFLINE)
+			{
+				tempdata=OL_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=0;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			break;
+		case NODE_INFO_TYPE_REMOTE_CONTROL:
+			//if(alarm_data == ALARM )
+			{
+			tempdata=OP_KEY;//OF_KEY
+			memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+			alarm_data=(alarm_data>>2)&0x03;
+			if(alarm_data)
+				Loginfo("\n ----------report_zb_alarmMsg alarm_data=== 01\r\n");
+			memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			//else if(alarm_data == BATTERY_LOW_ALARM)
+			{			
+				tempdata=BA_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=1;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			//else if(alarm_data == SUB_DEV_OFFLINE)
+			{
+				tempdata=OL_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=0;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			break;
+		case NODE_INFO_TYPE_AI_SOCKET_USB:
+			//if(alarm_data == SUB_DEV_OFFLINE)
+			{
+				tempdata=OL_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=0;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			break;
+		case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+			//if(alarm_data == SUB_DEV_OFFLINE)
+			{
+				tempdata=OL_KEY;
+				memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+				alarm_data=1;
+				memcpy(ptr+ptrlen,&alarm_data,1);ptrlen+=1;
+			}
+			break;
+			default:
+			break;
+	}
+		
+	
+	tempdata=TM_KEY;
+	memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+	memcpy(ptr+ptrlen,&temp_buff[16],4);ptrlen+=4;
+	bufflen=combined_point_datapacket(ACTION,ALARM_ACT,NO_ENCRYPT,POINT,buff,ptr,ptrlen);//POINT
+	Sent_point_data(buff,bufflen);
+	mem_free(ptr);
+	
+//ZBINTOSS_CMD
+}
+void report_zb_alarmMsg(unsigned char* payload, int payloadlen)
+{
+	uint8_t buff[512];
+	uint8_t temp_buff[128]={0},tempbuff_len,alarm_data,tamper_data;
+	uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	uint16_t index,tempdata,product_devType;
+	uint32_t convert_intdata;
+	uint8_t encrypt_mode=NO_ENCRYPT;
+
+	#ifdef ENCRYPT_ENABLE
+	encrypt_mode=PRIVATE_ENCRYPT;
+	#endif
+	memset(buff,0,sizeof(buff));
+	ptr = mem_alloc(512);ptrlen=0;
+	tempdata=DEVICEID_KEY;
+	memcpy(ptr,&tempdata,1);ptrlen+=1;
+	Int_biglittle_Convert(network_config_call.server_deviceid,&convert_intdata);
+	memcpy(ptr+ptrlen,&convert_intdata,4);
+	ptrlen+=4;
+	//tempdata=SUB_INDEX_KEY;
+	//memcpy(ptr+ptrlen,&tempdata,1);ptrlen+=1;
+	//memcpy(ptr+ptrlen,&temp_buff[2],2);ptrlen+=2;
+
+	memcpy(ptr+ptrlen,payload,payloadlen);
+	ptrlen+=payloadlen;
+	
+	bufflen=combined_point_datapacket(ACTION,ALARM_ACT,encrypt_mode,POINT,buff,ptr,ptrlen);//NO_ENCRYPT
+	Sent_point_data(buff,bufflen);
+	mem_free(ptr);
+
+}
+
+//设备获取时间//
+int get_systemtime(void)
+{
+	uint8_t buff[512],i=0;
+	//uint8_t *ptr=NULL;
+	uint16_t rc=0x0001,bufflen,ptrlen=0,convertdata;
+	unsigned char *ptr = buff;
+	int	convert_intdata,ret;
+	char encrypt_mode=0;
+
+	#ifdef ENCRYPT_ENABLE
+		encrypt_mode=2;
+	#endif
+
+	writeChar(&ptr, ACTION);//action
+	writeChar(&ptr, GETTIME);//ENCRYPT_TYPE
+//	writeChar(&ptr, ENCRYPT_TYPE);
+//	writeChar(&ptr, encrypt_mode);
+	bufflen=0;
+	bufflen+=2;
+	//ret=Sent_point_data(buff,bufflen);
+	ret=Sent_mfunc_data(buff,bufflen);
+	
+	return ret;
+}
+
+void pass_data_process(int cmddata,char* data,int data_len)
+{
+	char i,payload[512]={0};
+	uint8_t test_data[50]={0},test_indata[50]="12345678",key[50]="12345678",testdata_len1;
+	unsigned char in[16]={0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38};
+	unsigned char key1[16]={0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38};
+	unsigned char OutText[16];
+	unsigned char ExpKey[4*4*(10+1)];
+	uint32_t testdata_len,lendata;
+	uint16_t subset_index,getep,tempzones;
+	HM_DEV_RAM_LIST *pni_temp;
+	DEVINFOOPTION devOption1;
+	devOption1.modeByte = 0;
+	switch(cmddata)
+	{
+		case GETAESKEY_CMD:
+			Loginfo("\n pass_data_process GETAESKEY_CMD:\r\n");
+			respond_pass_aeskey(cmddata);
+			break;
+		case GETMESG_CMD:
+		//qca_uart_send(buf, length);
+			Loginfo("\n pass_data_process:\r\n");
+			for(i = 0; i < data_len; i ++)//payloadlen mylen
+			{
+				Loginfo("%02x ",data[i]);
+			}
+			memcpy(payload,data,data_len);
+			printf("\n 11pass_data_process:\r\n");
+			for(i = 0; i < data_len; i ++)//payloadlen mylen
+			{
+				Loginfo("%02x ",payload[i]);
+			}
+			sent_pass_mesgdata();
+			break;
+		case SETZONE_CMD:
+			//hmIotsDevInfo.time_zones=(data[2]<<8)+data[3];//(data[3]<<8)+data[2];//
+			tempzones=(data[2]<<8)+data[3];
+			Loginfo("hmIotsDevInfo.time_zones set=%x\n",hmIotsDevInfo.time_zones);
+			pass_ack_data(cmddata,data,data_len);qcom_thread_msleep(50);
+			if(hmIotsDevInfo.time_zones!=tempzones)
+			{
+				hmIotsDevInfo.time_zones=tempzones;
+				userFlashWriteSysInfoFunc((uint8_t*)&hmIotsDevInfo);	
+			}
+			break;
+		case SETGWPARM_CMD:
+			Loginfo("pass_data_process SETGWPARM_CMD\n");
+			for(i = 0; i < data_len; i ++)//payloadlen mylen
+			{
+				Loginfo("%02x ",data[i]);
+			}
+			set_gateway_parm(data,data_len);
+			pass_ack_data(cmddata,data,data_len);
+			break;
+		case GETGWPARM_CMD:
+			Loginfo("pass_data_process GETGWPARM_CMD\n");
+			get_gateway_parm();
+			break;
+		case ZBINTONETWORK_CMD:
+			if(data[2]==0x33)
+			{
+				devNumInfo.devIndex[0] =  0;
+				memset(devNumInfo.devIndex,0,sizeof(devNumInfo.devIndex));
+			 	userFlashInitToRam();break;
+				Loginfo("\n test-------------- userFlashInitToRam\n");
+			}
+			Loginfo("\n pass_data_process ZBINTONETWORK_CMD\r\n");
+			if((data[2]&0x0f))
+			{
+				Loginfo("into network\r\n");
+				userFillUartCmdForPermitJoin(DEFUALT_ZIGBEE_JOINING_TIMERS);
+			}else{
+				Loginfo("Leave network\r\n");
+				userFillUartCmdForPermitJoin(0);//Close join netowrk
+			}
+			pass_ack_data(cmddata,data,data_len);
+
+			//test
+			if(data[2]==0x32)
+			{
+				mqtt_disconnect();
+			}
+			//userSaveAllInfoToFlash();
+			
+			/*sent_point_aeskey();
+			//test -----------------------
+			memset(test_indata,0,sizeof(test_indata));
+			memcpy(test_indata,"123456781234567812345",strlen("123456781234567812345"));
+			//test_indata[0]=0xff;test_indata[1]=0xfe;test_indata[2]=0xfd;
+			memset(key,0,sizeof(key));
+			memcpy(key,"b7e21cb8776411e7",strlen("b7e21cb8776411e7"));
+			Loginfo("\n 00 test user_aes128_encode test_indata=%s,key=%s\r\n",test_indata,key);
+			memset(test_data,0,sizeof(test_data));//test_indata
+			lendata=strlen("123456781234567812345");
+			testdata_len=user_aes128_encode(test_indata,lendata,test_data,key);//test_indata
+			Loginfo("\n 00 test user_aes128_encode hex==\r\n");
+			for(i=0;i<testdata_len;i++)
+			{
+				Loginfo("%02x",test_data[i]);
+			}
+			Loginfo("\n test user_aes128_encode test_data=%s\r\n",test_data);
+			memset(test_indata,0,sizeof(test_indata));
+			user_aes128_decode(test_data,strlen(test_data),test_indata,key);
+			Loginfo("\n 01 test user_aes128_encode hex==\r\n");
+			for(i=0;i<3;i++)
+			{
+				Loginfo("%02x",test_indata[i]);
+			}			
+			//user_aes_encode(test_indata,3,test_data,key);
+			Loginfo("\n 11 test user_aes128_encode test_data=%s\r\n",test_data);
+			memset(test_indata,0,sizeof(test_indata));
+			user_aes128_decode(test_data,strlen(test_data),test_indata,key);
+			Loginfo("\n 01 test user_aes128_encode hex==\r\n");
+			for(i=0;i<3;i++)
+			{
+				Loginfo("%02x",test_indata[i]);
+			}*/
+			
+			break;
+		case DELZBSUBSET_CMD:
+			subset_index=(data[3]<<8)+data[2];//(data[2]<<8)+data[3];
+			pass_ack_data(cmddata,data,data_len);
+			Loginfo("\n pass_data_process DELZBSUBSET_CMD =%x\r\n",subset_index);
+			pni_temp = findInDevListByIndex(subset_index);
+			if(pni_temp == NULL )//not find dev from index
+			{
+				printf("DELZBSUBSET_CMD the control dev was not valid\r\n");
+				//*rc = APP_CMD_RC_ERROR_PARAMETER;
+				return ;
+			}
+			userFillUartCmdForLeaveDev(pni_temp->shortAddr);//在uart tx函数中清除ram和flash
+			
+			break;
+		case GETALLZBSS_CMD:
+			pass_ack_data(cmddata,data,data_len);
+			Loginfo("\n pass_data_process all zigbee ss =%c\r\n",data[2]); //不支持
+			break;
+		case GETONEZBSS_CMD://app获取 SS
+			pass_ack_data(cmddata,data,data_len);
+			subset_index=(data[3]<<8)+data[2];//(data[2]<<8)+data[3];
+			Loginfo("\n pass_data_process one zigbee sub_index =%x\r\n",subset_index);
+			App_get_zigbeeSS(subset_index);
+			//devOption1.modeByte = ALL_DEV_STATE_ACTION;
+			//pni_temp = findInDevListByIndex(subset_index);
+			//userCreatNodeState_data(pni_temp,CREATE_dEV_STATE_FOR_ALARM_OID,devOption1);//SS
+			break;
+		case GETZBSINGLESS_CMD://get index.getep 单项状态值
+			pass_ack_data(cmddata,data,data_len);
+			subset_index=(data[3]<<8)+data[2];//(data[2]<<8)+data[3];
+			getep=data[4];
+			devOption1.modeByte |=(1<<getep);
+			App_get_zigbeeSingleSS(subset_index,devOption1);
+			Loginfo("\n pass_data_process one zigbee sub_index=%x, getep=%x\r\n",subset_index,getep);
+			break;
+		case GETZBSE_CMD://3007 se 
+		//App_get_zigbeeSE(uint16_t index)
+			subset_index=(data[3]<<8)+data[2];//(data[2]<<8)+data[3];
+			pass_ack_data(cmddata,data,data_len);
+			Loginfo("\n pass_data_process get zb se cmd =%x\r\n",subset_index);
+			pni_temp = findInDevListByIndex(subset_index);
+			if(pni_temp == NULL )//not find dev from index
+			{
+				printf("set zb se cmd the control dev was not valid\r\n");
+				return ;  //调试
+			}
+			App_get_zigbeeSE(subset_index);
+			
+			break;
+		case SETZBSE_CMD://3008  se
+			subset_index=(data[2]<<8)+data[3];//(data[3]<<8)+data[2];//
+			pass_ack_data(cmddata,data,data_len);
+			Loginfo("\n pass_data_process set zb se cmd =%x\r\n",subset_index);
+			pni_temp = findInDevListByIndex(subset_index);
+			if(pni_temp == NULL )//not find dev from index
+			{
+				printf("set zb se cmd the control dev was not valid\r\n");
+				return ;  //调试
+			}
+
+			memcpy(payload,data,data_len);
+			printf("\n 12pass_data_process:\r\n");
+			for(i = 0; i < data_len; i ++)//payloadlen mylen
+			{
+				Loginfo("%02x ",payload[i]);
+			}
+			user_SetSE_parm(pni_temp,&payload[4],data_len-4);
+			//pass_ack_data(cmddata,data,data_len);
+			
+			break;
+		case DEVICEOTA_CMD:
+			Loginfo("\n pass_data_process DEVICEOTA_CMD \r\n");
+			memcpy(payload,data,data_len);
+			printf("\n 13 pass_data_process:\r\n");
+			for(i = 0; i < data_len; i ++)//payloadlen mylen
+			{
+				Loginfo("%02x ",payload[i]);
+			}
+			printf("\n");
+			pass_ack_data(cmddata,data,data_len);
+			
+			break;
+		case SETSERVER_CMD:
+			Loginfo("\n pass_data_process SETSERVER_CMD \r\n");
+			printf("\n 12pass_data_process:\r\n");
+			pass_ack_data(cmddata,data,data_len);
+			memset(payload,0,sizeof(payload));
+			memcpy(payload,&data[2],data_len);
+			for(i = 0; i < data_len; i ++)//payloadlen mylen
+			{
+				Loginfo("%02x ",payload[i]);
+			}
+			printf("\n");
+			Loginfo("%s",payload);// hmIotsDevInfo.ipaddr
+			memset(hmIotsDevInfo.ipaddr,0,sizeof(hmIotsDevInfo.ipaddr));
+			memcpy(hmIotsDevInfo.ipaddr,payload,strlen(payload));
+			userFlashWriteSysInfoFunc((uint8_t*)&hmIotsDevInfo);
+			qcom_thread_msleep(3000);
+			userCheckSaveFlashAndReset(0);
+			break;
+			//device
+		default:
+			break;
+
+	}
+
+}
+//Decode
+void passdata_decode(char* data, int length)
+{
+	unsigned char* curdata = data;
+	unsigned char* enddata = NULL;
+	char read_data;
+	int rc = 0,cmd_data;
+	int mylen = 0,i,payloadlen;
+	char payload[512]={0};
+	//Loginfo("11111111111-----------=\n");
+	
+	read_data=readChar(&curdata);
+	Loginfo("passdata_decode action=%x\n",read_data);
+	read_data=readChar(&curdata);
+	Loginfo("passdata_decode action data=%x\n",read_data);
+	read_data=readChar(&curdata);
+	Loginfo("passdata_decode encrypt_type=%x\n",read_data);
+	read_data=readChar(&curdata);
+	Loginfo("passdata_decode encrypt_type data=%x\n",read_data);
+	read_data=readChar(&curdata);
+	Loginfo("passdata_decode pass=%x\n",read_data);
+	mylen=readInt(&curdata);
+
+	read_data=readInt(&curdata);//InformationType DestinationID
+	read_data=readInt(&curdata);//DestinationID
+	read_data=readInt(&curdata);//SourceID
+	read_data=readInt(&curdata);//sn
+	cmd_data=readInt(&curdata);//cmd
+	payloadlen=readInt(&curdata);
+		
+	Loginfo("passdata_decode data len=%x\n",payloadlen);
+	printf("passdata_decode pass hexdata:\r\n");
+//	for(i = 0; i < payloadlen; i ++)//payloadlen mylen
+	{
+//		printf("%02x ",curdata[i]);
+	}
+		//*payload = curdata;
+	pass_data_process(cmd_data,curdata,payloadlen);
+
+}
+void passdata_decode1(void)
+{
+	Loginfo("222222-----------=\n");
+}
+
+
+void GW_get_ServerDeviceId(void)
+{
+	int len;
+	uint8_t sent_buff[512];
+	len=combined_point_datapacket(ACTION,GETDEVICEID,NO_ENCRYPT,NULL,sent_buff,NULL,NULL);//POINT
+	Sent_point_data(sent_buff,len);
+	Loginfo("GW send ServerDeviceId succeed-----------=\n");
+	
+}
+
+void Point_data_handle(char* data, int length)
+{
+   char recv_buff[1024]={0};
+   uint8_t execute_typedata;
+   uint32_t systemtime_data,serverdeviceid;
+   uint8_t key[40];
+   uint16_t i,recvbuff_len;
+   char encrypt_mode;
+
+   encrypt_mode=data[3];
+   if(encrypt_mode==NO_ENCRYPT){
+   		memcpy(recv_buff,data,length);
+		Loginfo("Remoteserver Point data recv_buff:\n");
+	   for(i=0;i<length;i++)
+	   	{
+	   	 Loginfo("%02x ",recv_buff[i]);
+	   	}
+	    Loginfo("\n");
+   	}else if(encrypt_mode==PULIC_ENCRYPT)
+   	{
+   		memcpy(key,GW_PUBPLICKEY,strlen(GW_PUBPLICKEY)); 	
+   	}else if(encrypt_mode==PRIVATE_ENCRYPT)
+   	{
+   		memcpy(key,hmIotsDevInfo.aesKey,strlen(hmIotsDevInfo.aesKey)); 
+   	}
+	if(encrypt_mode!=NO_ENCRYPT)
+	{
+		recvbuff_len=user_aes128_decode(&data[7],length-7,&recv_buff[7],key);
+		memcpy(recv_buff,data,7);
+		recvbuff_len+=7;
+		Loginfo("Remoteserver Point data recv_buff:\n");
+	   for(i=0;i<recvbuff_len;i++)
+	   	{
+	   	 Loginfo("%02x ",recv_buff[i]);
+	   	}
+	    Loginfo("\n");
+	}
+   
+   execute_typedata=recv_buff[1];
+   switch(execute_typedata)
+   {
+   		
+   		case CONTROL:
+			break;
+		case GETTIME_ACK:
+			if(recv_buff[2]==TIMESTAMP)
+			{
+				systemtime_data=(uint32_t)((recv_buff[3]<<24)+(recv_buff[4]<<16)+(recv_buff[5]<<8)
+					+recv_buff[6]);
+				Loginfo("current systemtime:%d,%x\n",systemtime_data,systemtime_data);
+				network_config_call.system_time=systemtime_data;
+				network_config_call.gettime_flag=1;
+			}
+			break;
+		case GETDEVICEID_ACK:
+			if(recv_buff[4]==POINT)
+			{
+				if(recv_buff[6]!=5)//len
+					Loginfo("get serverdeviceid len error\n");
+				if(recv_buff[7]==DEVICEID_KEY)
+				//memcpy(&serverdeviceid,&recv_buff[8],4);
+				serverdeviceid=(recv_buff[8]<<24)+(recv_buff[9]<<16)+(recv_buff[10]<<8)+recv_buff[11];
+				Loginfo("-------------get serverdeviceid:%x,decimal:%d\n",serverdeviceid,serverdeviceid);
+				network_config_call.server_deviceid=serverdeviceid;
+				sent_point_aeskey();
+
+				//add test
+				//test_save_hmIotsDevInfo();
+			}
+			break;
+			default:
+			break;
+   }
+}
+
+void Mfunc_data_handle(char* data, int length)
+{
+char recv_buff[1024]={0};
+   uint8_t execute_typedata;
+   uint32_t systemtime_data;
+   uint32_t serverdeviceid;
+   uint32_t i;
+   memcpy(recv_buff,data,length);
+   Loginfo("Remoteserver Point data recv_buff:\n");
+   for(i=0;i<length;i++)
+   	{
+   	 Loginfo("%02x ",recv_buff[i]);
+   	}
+    Loginfo("\n");
+   execute_typedata=recv_buff[1];
+   switch(execute_typedata)
+   {
+   		
+   		case CONTROL:
+			break;
+		case GETTIME_ACK:
+			if(recv_buff[2]==TIMESTAMP)
+			{
+				systemtime_data=(uint32_t)((recv_buff[3]<<24)+(recv_buff[4]<<16)+(recv_buff[5]<<8)
+					+recv_buff[6]);
+				Loginfo("current systemtime:%d,%x\n",systemtime_data,systemtime_data);
+				network_config_call.system_time=systemtime_data;
+				network_config_call.gettime_flag=1;
+			}
+			break;
+			default:
+			break;
+   	}
+}
+void Pass_data_handle(char* data, int length)
+{
+   char recv_buff[1024]={0};
+   char key[40]={0};
+   char encrypt_mode;
+   uint16_t recvbuff_len;
+
+   encrypt_mode=data[3];
+   if(encrypt_mode==NO_ENCRYPT){
+   		//memcpy(recv_buff,data,length);
+		passdata_decode(data,length);
+  		memcpy(recv_buff,data,length);
+   		Loginfo("Remoteserver_data_handle recv_buff=%s\n",recv_buff);
+   	}else if(encrypt_mode==PULIC_ENCRYPT)
+   	{
+   		memcpy(key,GW_PUBPLICKEY,strlen(GW_PUBPLICKEY)); 	
+   	}else if(encrypt_mode==PRIVATE_ENCRYPT)
+   	{
+   		memcpy(key,hmIotsDevInfo.aesKey,strlen(hmIotsDevInfo.aesKey)); 
+   	}
+	if(encrypt_mode!=NO_ENCRYPT)
+	{
+		recvbuff_len=user_aes128_decode(&data[7],length-7,&recv_buff[7],key);
+		memcpy(recv_buff,data,7);
+		recvbuff_len+=7;
+		
+		passdata_decode(recv_buff,recvbuff_len);
+   		Loginfo("Remoteserver_data_handle recv_buff=%s\n",recv_buff);
+	}
+   
+   
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,5064 @@
+#include "qcom_common.h"
+#include "qca_json.h"
+#include "hm_app.h"
+#include "hm_zigbeeInfohand.h"
+#include "hm_sceneAndLinkage.h"
+#include "hm_halBeep.h"
+#include "hm_timerEvent.h"
+#include "hm_net_data_manage.h"
+#include "hm_reportDevToCloud.h"
+
+
+extern UART_RX_DATA_BUF uartRXData[MAX_UART_RX_BUF_NUM];
+extern UART_TX_CMD_BUF  uartTXCmd[MAX_UART_TX_CMD_BUF_NUM];
+NEEDOUTLIST needOutList[MAX_ALLOW_OUT_DEV_NUM];
+extern HM_GW_LIST gw_info;
+extern DEV_NUM_INFO devNumInfo;
+extern BEEP_INFO beep_info;
+SCENEEXEBUF sceneExeBuf[MAX_SCENE_EXE_BUF_NUM];
+extern DEV_MYSELF_INFO hmIotsDevInfo;
+extern GWSTATFORTIME gwStateForRealTime;
+extern BEEP_INFO beep_info;
+
+extern TX_SEMAPHORE beep_semaphore_ptr;
+
+
+/****************************************************************************
+读取小夜灯联动信息
+****************************************************************************/
+int userReadDevLinkGWLightNightFunc(uint32_t sn,uint8_t rcvType,uint32_t appDevId)
+{
+	int ret = 0;
+	uint8_t i;
+	HM_DEV_RAM_LIST *pni_temp;
+	json_t *js_Main,*js_obj,*js_ds;
+	uint16_t tempIndex;
+	uint8_t tempNum = 0;
+
+
+	js_Main = json_create_object();
+	json_add_item_to_object(js_Main,GW_BASIC_STATE_LIGHT_SET_OID,js_obj = json_create_object());
+	json_add_item_to_object(js_obj,"EB",json_create_number(hmIotsDevInfo.gwLightForNight.enable));
+	json_add_item_to_object(js_obj,"DS",js_ds = json_create_array());
+
+	if(hmIotsDevInfo.gwLightForNight.indexNum > 0)
+	{
+		for(i = 0; i < MAX_HOME_ARM_FOR_SENSOR_NUM; i ++)
+		{
+			tempIndex = hmIotsDevInfo.gwLightForNight.index[i];
+			if(tempIndex != 0)
+			{
+				pni_temp = findInDevListByIndex(tempIndex);
+				if((pni_temp != NULL) && ((pni_temp->devType == NODE_INFO_TYPE_MAGNET_DOOR) || (pni_temp->devType == NODE_INFO_TYPE_PIR_SENSOR) || (pni_temp->devType == NODE_INFO_TYPE_VIBRATION)))
+				{
+					json_add_item_toarray(js_ds,json_create_number(tempIndex));
+					tempNum ++;
+				}else{
+					hmIotsDevInfo.gwLightForNight.index[i] = 0;
+				}
+			}
+		}
+	}
+	if(1)
+	{
+		userCreateJsplToBuf(js_Main,APP_CMD_RC_SUCCESS,MESSAGE_RSP_GETINFO,NULL,NULL,sn,SEND_TO_APP_DATA_NEED_ENCODE,rcvType,appDevId);
+		if(js_Main != NULL)
+		{
+			json_delete(js_Main);
+			js_Main = NULL;
+		}
+		printf("the index light night have %d link dev\r\n",tempNum);
+	}
+	
+	return ret;
+}
+
+/*********************************************************************
+设备联动声光警号，查询是否联动
+********************************************************************/
+void userCheckDevLinkWdWasTrigger(uint16_t devIndex,uint32_t alarmSation)
+{
+	HM_GW_LIST *pgw_info=&gw_info;
+	uint8_t i;
+	HM_DEV_RAM_LIST *pni= (HM_DEV_RAM_LIST *)pgw_info->pnode_list;
+	HM_DEV_RAM_LIST *pni_tmp=pni;
+	printf("check dev link wd\r\n");
+	if (pni==NULL)
+	{
+		printf("in dev link wd:the ram is empty\r\n");
+		return;
+	}
+	do{
+		if (pni_tmp->devType == NODE_INFO_TYPE_WARNING_DEV)
+		{
+			if(pni_tmp->epList[0].devData.wdStateApp.devLinkWd.enable == 1)
+			{
+				for(i = 0; i < MAX_DEV_LINK_WD_NUM; i ++)
+				{
+					if(pni_tmp->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[i].zIndex == devIndex)
+					{
+						if(pni_tmp->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[i].zAlarmType & (0x00000001 << alarmSation))
+						{
+							userAppControlWDFunc(pni_tmp->shortAddr,pni_tmp->epList[0].ep,1,pni_tmp->epList[0].devData.wdStateApp.duration);	
+						}
+						break;
+					}
+				}
+			}
+		}
+			
+		pni_tmp=(HM_DEV_RAM_LIST *)pni_tmp->pnext_dev_info;
+	}while (pni_tmp != pni);
+}
+
+
+
+
+/****************************************************************************
+读取声光警号联动信息
+****************************************************************************/
+int userReadDevLinkWdFunc(uint16_t index,uint32_t sn,uint8_t rcvType,uint32_t appDevId)
+{
+	int ret = 0;
+	uint8_t i;
+	HM_DEV_RAM_LIST *pni_temp;
+	json_t *js_Main,*js_obj,*js_ds,*js_zs;
+	char oid[25];
+	uint8_t needSaveFlash = 0;
+	uint16_t tempIndex;
+	uint8_t tempNum = 0;
+	pni_temp = findInDevListByIndex(index);
+	if(pni_temp != NULL)
+	{
+		js_Main = json_create_object();
+		memset(oid,'\0',25);
+		sprintf(oid,"%s%d.41",GW_APP_COM_WD_OID,index);
+		json_add_item_to_object(js_Main,oid,js_obj = json_create_object());
+		json_add_item_to_object(js_obj,"EB",json_create_number(pni_temp->epList[0].devData.wdStateApp.devLinkWd.enable));
+		json_add_item_to_object(js_obj,"DS",js_ds = json_create_array());
+
+		for(i = 0; i < MAX_DEV_LINK_WD_NUM; i ++)
+		{
+			tempIndex = pni_temp->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[i].zIndex;
+			if(tempIndex != 0)
+			{
+				if(findInDevListByIndex(tempIndex) != NULL)
+				{
+					js_zs = json_create_object();
+					json_add_item_to_object(js_zs,"ZX",json_create_number(tempIndex));
+					json_add_item_to_object(js_zs,"ZS",json_create_number(pni_temp->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[i].zAlarmType));
+					json_add_item_toarray(js_ds,js_zs);
+					tempNum ++;
+				}else{
+					pni_temp->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[i].zIndex = 0;
+					pni_temp->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[i].zAlarmType = 0;
+					needSaveFlash = 1;
+				}
+			}
+		}
+		if(tempNum > 0)
+		{
+			userCreateJsplToBuf(js_Main,APP_CMD_RC_SUCCESS,MESSAGE_RSP_GETINFO,NULL,NULL,sn,SEND_TO_APP_DATA_NEED_ENCODE,rcvType,appDevId);
+			if(js_Main != NULL)
+			{
+				json_delete(js_Main);
+				js_Main = NULL;
+			}
+			printf("the index wd have %d link dev\r\n",tempNum);
+		}else{
+			userCreateJsplToBuf(js_Main,APP_CMD_RC_SUCCESS,MESSAGE_RSP_GETINFO,NULL,NULL,sn,SEND_TO_APP_DATA_NEED_ENCODE,rcvType,appDevId);
+			if(js_Main != NULL)
+			{
+				json_delete(js_Main);
+				js_Main = NULL;
+			}
+			printf("the index wd not have link dev\r\n");
+		}
+	}else{
+		ret = -1;
+		printf("read the wd index was not valid\r\n");
+	}
+
+	if(needSaveFlash == 1)
+	{
+		userUpdateDevInfoDataToFlash(pni_temp);
+	}
+	return ret;
+}
+
+
+/*******************************************************************
+声光警号联动关联创建函数
+********************************************************************/
+int userCreatDevLinkWdFunc(json_t *scenePl,HM_DEV_RAM_LIST *pni)
+{
+	uint8_t i;
+	int ret = 0;
+	uint8_t tempNum;
+	uint8_t needSaveFlash = 0;
+	uint32_t oidCount;
+	json_t *js_child,*js_eb,*js_ds,*js_temp;
+
+	printf("test for creat dev link wd\r\n");
+	js_eb = json_get_object_item(scenePl,"EB");
+	js_ds = json_get_object_item(scenePl,"DS");
+	if((js_eb == NULL) && (js_ds == NULL))
+	{
+		printf("the dev link wd json was not valid\r\n");
+		return -1;
+	}
+
+	if(js_eb != NULL)
+	{
+		if(pni->epList[0].devData.wdStateApp.devLinkWd.enable != js_eb->valueint)
+		{
+			pni->epList[0].devData.wdStateApp.devLinkWd.enable = js_eb->valueint;
+			needSaveFlash = 1;
+		}
+	}
+
+	if(js_ds != NULL)
+	{
+		needSaveFlash = 1;
+		oidCount = json_get_array_size(js_ds);
+		printf("the %d dev link wd\r\n",oidCount);
+
+		if(oidCount > MAX_DEV_LINK_WD_NUM)
+		{
+			oidCount = MAX_DEV_LINK_WD_NUM;
+		}
+		tempNum = 0;
+		for(i = 0; i < oidCount; i ++)
+		{
+			js_child = json_get_array_item(js_ds,i);
+			if(js_child != NULL)
+			{
+				
+				js_temp = json_get_object_item(js_child,"ZX");
+				if(js_temp != NULL)
+				{
+					if(findInDevListByIndex(js_temp->valueint) != NULL)
+					{
+						pni->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[tempNum].zIndex = js_temp->valueint;
+					}else{
+						printf("dev link wd the dev was not in dev list\r\n");
+						continue;
+					}
+				}else{
+					printf("the json not have zx\r\n");
+					continue;
+				}
+
+				
+				js_temp = json_get_object_item(js_child,"ZS");
+				if(js_temp != NULL)
+				{
+					if(js_temp->valueint != 0)
+					{
+						pni->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[tempNum].zAlarmType = js_temp->valueint;
+					}else{
+						printf("dev link wd the dev alarm state was not valid\r\n");
+						continue;
+					}
+				}else{
+					printf("the json not have zs\r\n");
+					continue;
+				}
+				tempNum ++;
+			}
+		}
+	}
+	if(needSaveFlash)
+	{
+		userUpdateDevInfoDataToFlash(pni);
+		printf("creat dev link wd was success\r\n");
+	}
+	return ret;
+}
+
+/*******************************************************************
+声光警号联动关联创建函数 new
+********************************************************************/
+int userCreatDevLink_WdFunc(char* data,HM_DEV_RAM_LIST *pni)
+{
+	uint8_t i;
+	int ret = 0;
+	uint8_t tempNum;
+	uint8_t needSaveFlash = 0;
+	uint32_t oidCount;
+	uint8_t eb_data,ds_counts,temp_data;
+	uint16_t tem_zbindex;
+
+	eb_data=data[0];
+	ds_counts=data[1];
+	if(pni->epList[0].devData.wdStateApp.devLinkWd.enable != eb_data)
+	{
+		pni->epList[0].devData.wdStateApp.devLinkWd.enable = eb_data;
+		needSaveFlash = 1;
+	}
+	tempNum = 0;
+	if(ds_counts==0)
+		return ret;
+	needSaveFlash = 1;
+	for(i = 0; i < ds_counts; i ++)
+	{
+		tem_zbindex=(data[2+6*i]<<8)+data[3+6*i];//    2 3  8 9
+		if(findInDevListByIndex(tem_zbindex) != NULL)
+		{
+			pni->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[tempNum].zIndex = tem_zbindex;
+		}else{
+			printf("dev link wd the dev was not in dev list\r\n");
+			continue;
+		}
+		temp_data=(data[4+6*i]<<24)+(data[5+6*i]<<16)+(data[6+6*i]<<8)+data[7+6*i];
+		if(temp_data != 0)
+		{
+			
+			pni->epList[0].devData.wdStateApp.devLinkWd.zLinkWd[tempNum].zAlarmType = temp_data;
+		}else{
+			printf("dev link wd the dev alarm state was not valid\r\n");
+			continue;
+		}
+		tempNum ++;
+	}
+	if(needSaveFlash)
+	{
+		ret=1;
+		userUpdateDevInfoDataToFlash(pni);
+		printf("creat dev link wd was success\r\n");
+	}
+	return ret;
+}
+
+
+
+/*********************************************************************
+联动执行函数
+*********************************************************************/
+int userDealLinkageForOutputBuf(OUTPUTINFO output)
+{
+	int ret = 0;
+	uint8_t i,j;
+	HM_GW_LIST *pgw_info=&gw_info;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t sceneFlashSave = 0;
+	uint8_t needSaveFlashFlag = 0;
+	uint8_t needSaveNumFlag = 0;
+	uint8_t outputNum = 0;
+	uint8_t tmEp1 = 0xff,tmEp2 = 0xff,tmEp3 = 0xff,tmEp4 = 0xff;
+
+	if(output.delay > 0)
+	{
+		printf("deal linkage output for time\r\n");
+		userAddDelayToTimerEvent(output.delay,output);
+	}else{
+
+		if(output.type == SCENE_LIST_GW_PAYLOAD)
+		{
+			printf("deal linkage output for gw\r\n");
+			if(output.devAction.GWStat.armtype == 1)
+			{
+				if(output.devData.gwOutput.armType == SENSOR_DISARM){
+					hmSetAllSensorDisarm();
+					if(beep_info.work_flag == 0 )
+					 {
+						 beep_info.work_type = BEEP_DISARM;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+					 if(hmIotsDevInfo.sensor_arm_type != SENSOR_DISARM)
+					 {
+						 hmIotsDevInfo.sensor_arm_type = SENSOR_DISARM;
+						 needSaveFlashFlag = 1;
+					 }
+				}else if(output.devData.gwOutput.armType == SENSOR_HOME_ARM){
+					hmSetAllSensorHomeArm();
+					if((beep_info.work_flag == 0) && ((beep_info.work_type != BEEP_ALARM) && (beep_info.work_type != BEE_SOUND_LOCAL_REGULA)))
+					 {
+						 beep_info.work_type = BEEP_HOME_ARM;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+					if(hmIotsDevInfo.sensor_arm_type != SENSOR_HOME_ARM)
+					 {
+						 hmIotsDevInfo.sensor_arm_type = SENSOR_HOME_ARM;
+						 needSaveFlashFlag = 1;
+					 }
+				}else if(output.devData.gwOutput.armType == SENSOR_ARM){
+					hmSetAllSensorArm();
+					if((beep_info.work_flag == 0) && ((beep_info.work_type != BEEP_ALARM) && (beep_info.work_type != BEE_SOUND_LOCAL_REGULA)))
+					 {
+						 beep_info.work_type = BEEP_ARM;
+						 beep_info.work_flag = 1;
+						 tx_semaphore_put(&beep_semaphore_ptr);
+					 }
+					if(hmIotsDevInfo.sensor_arm_type != SENSOR_ARM)
+					 {
+						 hmIotsDevInfo.sensor_arm_type = SENSOR_ARM;
+						 needSaveFlashFlag = 1;
+					 }
+				}else{
+					printf("in linkage deal:the arm mode is not valid\r\n");
+					ret = -2;
+				}
+
+				if(needSaveFlashFlag == 1)
+				{
+					userFlashWriteSysInfoFunc((uint8_t*)&hmIotsDevInfo);
+				}
+			}
+			if(output.devAction.GWStat.gwlightonoff == 1)
+			{
+				hmIotsDevInfo.light_onoff = output.devData.gwOutput.lightOnoff;
+			}
+		}else if(output.type == SCENE_LIST_ZB_DEV_PAYLOAD){
+			printf("deal linkage output for zb dev\r\n");
+			pni_temp = findInDevListByIndex(output.targetId);
+			if(pni_temp == NULL)
+			{
+				printf("in deal linkage:the index was not in dev list\r\n");
+				ret = -2;
+			}else{
+				switch(pni_temp->devType)
+				{
+					case NODE_INFO_TYPE_LIGHT_RGB:
+						printf("deal linage output for RGB\r\n");
+						if(output.devAction.RGBSet.onoff == 1)
+						{
+							if(pni_temp->epList[0].devData.colorStateApp.onOffStatus != output.devData.rgbOutput.onoff)
+							{
+								userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[0].ep,output.devData.rgbOutput.onoff);	
+							}
+						}
+
+
+						qcom_thread_msleep(20);
+						if((output.devAction.RGBSet.colour_r == 1) ||
+						   (output.devAction.RGBSet.colour_g == 1) ||
+						    (output.devAction.RGBSet.colour_b == 1))
+						{
+							pni_temp->epList[0].ep,pni_temp->epList[0].devData.colorStateApp.rgb_r = output.devData.rgbOutput.rgb_r;
+							pni_temp->epList[0].ep,pni_temp->epList[0].devData.colorStateApp.rgb_g = output.devData.rgbOutput.rgb_g;
+							pni_temp->epList[0].ep,pni_temp->epList[0].devData.colorStateApp.rgb_b = output.devData.rgbOutput.rgb_b;
+							userFillUartCmdForColorControl(pni_temp->shortAddr,pni_temp->epList[0].ep,pni_temp->epList[0].devData.colorStateApp.rgb_r,
+							pni_temp->epList[0].devData.colorStateApp.rgb_g,pni_temp->epList[0].devData.colorStateApp.rgb_b);
+						}
+
+						qcom_thread_msleep(20);
+						if(output.devAction.RGBSet.level == 1)
+						{
+							if(pni_temp->epList[0].devData.colorStateApp.level != output.devData.rgbOutput.level)
+							{
+								userFillUartCmdForLevel(pni_temp->shortAddr,pni_temp->epList[0].ep,MOVE_TO_LEVEL_WTONOFF,output.devData.rgbOutput.level,0);	
+							}
+						}
+						break;
+					case NODE_INFO_TYPE_AI1SW:
+					case NODE_INFO_TYPE_AI2SW:
+					case NODE_INFO_TYPE_AI3SW:
+						printf("deal linkage output for switch\r\n");
+						for(j = 0; j < pni_temp->epNum; j ++)
+						{
+							if(pni_temp->epList[j].ep == 1)
+							{
+								tmEp1 = j;
+							}else if(pni_temp->epList[j].ep == 2){
+								tmEp2 = j;
+							}else if(pni_temp->epList[j].ep == 3){
+								tmEp3 = j;
+							}
+						}
+						if(output.devAction.SWSet.onoff1 == 1)
+						{
+							if(tmEp1 != 0xff)
+							{
+								//if(output.devData.switchOutput.onoff1 != pni_temp->epList[tmEp1].devData.witchStateApp.onOffStatus)
+								{
+									userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,output.devData.switchOutput.onoff1);
+								}
+							}
+						}
+						qcom_thread_msleep(20);
+						if(output.devAction.SWSet.onoff2 == 1)
+						{
+							if(tmEp2 != 0xff)
+							{
+								//if(output.devData.switchOutput.onoff2 != pni_temp->epList[tmEp2].devData.witchStateApp.onOffStatus)
+								{
+									userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,output.devData.switchOutput.onoff2);
+								}
+							}
+						}
+						qcom_thread_msleep(20);
+						if(output.devAction.SWSet.onoff3 == 1)
+						{
+							if(tmEp3 != 0xff)
+							{
+								//if(output.devData.switchOutput.onoff3 != pni_temp->epList[tmEp3].devData.witchStateApp.onOffStatus)
+								{
+									userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp3].ep,output.devData.switchOutput.onoff3);
+								}
+							}
+						}
+						break;
+					case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+						printf("deal linkage output for cut rgb\r\n");
+						for(j = 0; j < pni_temp->epNum; j ++)
+						{
+							if(pni_temp->epList[j].ep == 1)
+							{
+								tmEp1 = j;
+							}else if(pni_temp->epList[j].ep == 2){
+								tmEp2 = j;
+							}else if(pni_temp->epList[j].ep == 3){
+								tmEp3 = j;
+							}else if(pni_temp->epList[j].ep == 4){
+								tmEp4= j;
+							}
+						}
+						//on off
+						if(output.devAction.CUTRGBSet.onoffList1 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.onoff1 != pni_temp->epList[tmEp1].devData.cstRgbStateApp.onOffStatus)
+							{
+								userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,output.devData.cutRgbOutput.onoff1);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						if(output.devAction.CUTRGBSet.onoffList2 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.onoff2 != pni_temp->epList[tmEp2].devData.cstRgbStateApp.onOffStatus)
+							{
+								userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,output.devData.cutRgbOutput.onoff2);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						if(output.devAction.CUTRGBSet.onoffList3 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.onoff3 != pni_temp->epList[tmEp3].devData.cstRgbStateApp.onOffStatus)
+							{
+								userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp3].ep,output.devData.cutRgbOutput.onoff3);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						if(output.devAction.CUTRGBSet.onoffList4 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.onoff4 != pni_temp->epList[tmEp4].devData.cstRgbStateApp.onOffStatus)
+							{
+								userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp4].ep,output.devData.cutRgbOutput.onoff4);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+
+
+						//brightness 
+						if(output.devAction.CUTRGBSet.brightnessList1 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.brightness1 != pni_temp->epList[tmEp1].devData.cstRgbStateApp.brightness)
+							{
+								userFillUartCmdForBrightness(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,output.devData.cutRgbOutput.brightness1);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						if(output.devAction.CUTRGBSet.brightnessList2 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.brightness2 != pni_temp->epList[tmEp2].devData.cstRgbStateApp.brightness)
+							{
+								userFillUartCmdForBrightness(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,output.devData.cutRgbOutput.brightness2);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						if(output.devAction.CUTRGBSet.brightnessList3 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.brightness3 != pni_temp->epList[tmEp3].devData.cstRgbStateApp.brightness)
+							{
+								userFillUartCmdForBrightness(pni_temp->shortAddr,pni_temp->epList[tmEp3].ep,output.devData.cutRgbOutput.brightness3);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						if(output.devAction.CUTRGBSet.brightnessList4 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.brightness4 != pni_temp->epList[tmEp4].devData.cstRgbStateApp.brightness)
+							{
+								userFillUartCmdForBrightness(pni_temp->shortAddr,pni_temp->epList[tmEp4].ep,output.devData.cutRgbOutput.brightness4);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+
+						//color temperature
+						if(output.devAction.CUTRGBSet.colorTempList1 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.colorTemp1!= pni_temp->epList[tmEp1].devData.cstRgbStateApp.brightness)
+							{
+								userFillUartCmdForColorTemperature(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,output.devData.cutRgbOutput.colorTemp1);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						if(output.devAction.CUTRGBSet.colorTempList2 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.colorTemp2!= pni_temp->epList[tmEp2].devData.cstRgbStateApp.brightness)
+							{
+								userFillUartCmdForColorTemperature(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,output.devData.cutRgbOutput.colorTemp2);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+
+						if(output.devAction.CUTRGBSet.colorTempList3 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.colorTemp3!= pni_temp->epList[tmEp3].devData.cstRgbStateApp.brightness)
+							{
+								userFillUartCmdForColorTemperature(pni_temp->shortAddr,pni_temp->epList[tmEp3].ep,output.devData.cutRgbOutput.colorTemp3);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						if(output.devAction.CUTRGBSet.colorTempList4 == 1)
+						{
+
+							if(output.devData.cutRgbOutput.colorTemp4!= pni_temp->epList[tmEp4].devData.cstRgbStateApp.brightness)
+							{
+								userFillUartCmdForColorTemperature(pni_temp->shortAddr,pni_temp->epList[tmEp4].ep,output.devData.cutRgbOutput.colorTemp4);
+							}
+							qcom_thread_msleep(20);
+							
+						}
+						break;
+					case NODE_INFO_TYPE_RELAY_CONTROL:
+						printf("linkage output for relay\r\n");
+						break;
+					case NODE_INFO_TYPE_AI_SOCKET_USB:
+						printf("linkage output for usb plug\r\n");
+						for(j = 0; j < pni_temp->epNum; j ++)
+						{
+							if(pni_temp->epList[j].ep == 1)
+							{
+								tmEp1 = j;
+							}else if(pni_temp->epList[j].ep == 2){
+								tmEp2 = j;
+							}
+						}
+						if(output.devAction.UPlugSet.relayOnoff == 1)
+						{
+							if(tmEp1 != 0xff)
+							{
+								//if(output.devData.uplugOutput.onoff_r != pni_temp->epList[tmEp1].devData.onoffOutStateApp.onOffStatus)
+								{
+									userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,output.devData.uplugOutput.onoff_r);
+								}
+							}
+						}
+						qcom_thread_msleep(20);
+						if(output.devAction.UPlugSet.usbOnoff == 1)
+						{
+							if(tmEp2 != 0xff)
+							{
+								//if(output.devData.uplugOutput.onoff_u != pni_temp->epList[tmEp2].devData.onoffOutStateApp.onOffStatus)
+								{
+									userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,output.devData.uplugOutput.onoff_u);
+								}
+							}
+						}
+						break;
+					case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+						printf("linkage output for smart plug\r\n");
+						if(output.devAction.SPlugSet.relayOnoff == 1)
+						{
+							//if(pni_temp->epList[0].devData.splugStateApp.onOffStatus != output.devData.splugOutput.onoff)
+							{
+								userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[0].ep,output.devData.splugOutput.onoff);	
+							}
+						}
+						break;
+					case NODE_INFO_TYPE_WARNING_DEV: 
+						printf("linkage output for wd\r\n");
+						if(output.devAction.WDSet.onoff == 1)
+						{
+							userAppControlWDFunc(pni_temp->shortAddr,pni_temp->epList[0].ep,output.devData.wdOutput.onoff,pni_temp->epList[0].devData.wdStateApp.duration);
+						}
+
+						break;
+					default:
+						printf("in deal linkage:the index dev was not controled\r\n");
+						ret = -2;
+						break;
+				}
+			}
+		}else if(output.type == SCENE_LIST_SCENE_PAYLOAD){
+		
+			printf("linkage output for scene,fill exe scene buf\r\n");
+			userFillSceneExeBuf(output.targetId,0);
+		}else{
+			ret = -2;
+		}
+	}
+	return ret;
+}
+
+
+
+
+/*****************************************************************************************
+联动触发检测函数，一般只把zigbee设备和时间作为触发条件，在此
+保留GW状态触发的部分，由app决定是否让用户设置GW条件触发，时
+触发在定时器中实现，在此只用实现GW和ZB DEV条件触发
+*****************************************************************************************/
+void userLinkageInputEventTriggerFunc(SCENE_LIST_TYPE type,HM_DEV_RAM_LIST *pni,DEVINFOOPTION devAction)
+{
+	uint8_t i,j;
+	HM_GW_LIST *pgw_info=&gw_info;
+	DEVINFOOPTION tempAction;
+	uint8_t tmEp1 = 0xff,tmEp2 = 0xff, tmEp3 = 0xff,tmEp4 = 0xff;
+	for(i = 0; i < MAX_LINKAGE_NUM; i ++)
+	{
+		if(devNumInfo.linkageIndex[i] != INVALID_SCENE_LINKAGE_INDEX)
+		{
+			if(pgw_info->linkage_list[i].Enable == 0)
+			{
+				continue;
+			}
+			if(pgw_info->linkage_list[i].inputInfo.triggering == 0)
+			{
+				if(pgw_info->linkage_list[i].inputInfo.type == type)
+				{
+					tempAction.modeByte = pgw_info->linkage_list[i].inputInfo.IN.devIn.devAction.modeByte & devAction.modeByte;
+					if(tempAction.modeByte)//在该函数中只处理ZBDEV 和GW的触发，他们都带有devaction
+					{
+						if(type == SCENE_LIST_ZB_DEV_PAYLOAD)
+						{
+							printf("check zb dev state trigget linkage\r\n");
+							if(pgw_info->linkage_list[i].inputInfo.IN.devIn.targetId == pni->index)
+							{
+								switch(pni->devType)
+								{
+									case NODE_INFO_TYPE_LIGHT_RGB:
+										printf("trigger linkage for RGB\r\n");
+										if(tempAction.RGBState.onoff == 1)
+										{
+											if(checkDataAllowConditionToAnother(pni->epList[0].devData.colorStateApp.onOffStatus,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.rgbStaInput.onoff) == 0)
+											{
+												pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											}
+										}
+										break;
+									case NODE_INFO_TYPE_AI1SW:
+									case NODE_INFO_TYPE_AI2SW:
+									case NODE_INFO_TYPE_AI3SW:
+										printf("trigger linkage for switch\r\n");
+										for(j = 0; j < pni->epNum; j ++)
+										{
+											if(pni->epList[j].ep == 1)
+											{
+												tmEp1 = j;
+											}else if(pni->epList[j].ep == 2){
+												tmEp2 = j;
+											}else if(pni->epList[j].ep == 3){
+												tmEp3 = j;
+											}
+										}
+
+										if(tempAction.SWState.onoff1 == 1)
+										{
+											if(tmEp1 != 0xff)
+											{
+												if(checkDataAllowConditionToAnother(pni->epList[tmEp1].devData.witchStateApp.onOffStatus,
+												    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.swStaInput.onoff1) == 0)
+												    {
+														pgw_info->linkage_list[i].inputInfo.triggering = 1;
+												    }
+											}
+										}else if(tempAction.SWState.onoff2 == 1)
+										{
+											if(tmEp2 != 0xff)
+											{
+												if(checkDataAllowConditionToAnother(pni->epList[tmEp2].devData.witchStateApp.onOffStatus,
+												    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.swStaInput.onoff2) == 0)
+												    {
+														pgw_info->linkage_list[i].inputInfo.triggering = 1;
+												    }
+											}
+										}else if(tempAction.SWState.onoff3 == 1)
+										{
+											if(tmEp3 != 0xff)
+											{
+												if(checkDataAllowConditionToAnother(pni->epList[tmEp3].devData.witchStateApp.onOffStatus,
+												    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.swStaInput.onoff3) == 0)
+												    {
+														pgw_info->linkage_list[i].inputInfo.triggering = 1;
+												    }
+											}
+										}
+
+										
+										
+										break;
+									case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+										printf("trigger linkage for cut rgb\r\n");
+										for(j = 0; j < pni->epNum; j ++)
+										{
+											if(pni->epList[j].ep == 1)
+											{
+												tmEp1 = j;
+											}else if(pni->epList[j].ep == 2){
+												tmEp2 = j;
+											}else if(pni->epList[j].ep == 3){
+												tmEp3 = j;
+											}else if(pni->epList[j].ep == 4){
+												tmEp4 = j;
+											}
+										}
+										if(tempAction.CUTRGBState.onoffList1 == 1)
+										{
+											
+											if(checkDataAllowConditionToAnother(pni->epList[tmEp1].devData.cstRgbStateApp.onOffStatus,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.cutRgbInput.onoff1) == 0)
+											    {
+													pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											    }
+											
+										}else if(tempAction.CUTRGBState.onoffList2 == 1)
+										{
+								
+											if(checkDataAllowConditionToAnother(pni->epList[tmEp2].devData.cstRgbStateApp.onOffStatus,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.cutRgbInput.onoff2) == 0)
+											    {
+													pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											    }
+											
+										}else if(tempAction.CUTRGBState.onoffList3 == 1)
+										{
+			
+											if(checkDataAllowConditionToAnother(pni->epList[tmEp3].devData.cstRgbStateApp.onOffStatus,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.cutRgbInput.onoff3) == 0)
+											    {
+													pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											    }
+											
+										}else if(tempAction.CUTRGBState.onoffList4 == 1)
+										{
+											if(checkDataAllowConditionToAnother(pni->epList[tmEp4].devData.cstRgbStateApp.onOffStatus,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.cutRgbInput.onoff4) == 0)
+											    {
+													pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											    }
+											
+										}
+										
+										
+										break;
+									case NODE_INFO_TYPE_RELAY_CONTROL:
+										printf("trigger linkage for relay\r\n");
+										break;
+									case NODE_INFO_TYPE_AI_SOCKET_USB:
+										printf("trigger linkage for usb plug\r\n");
+										for(j = 0; j < pni->epNum; j ++)
+										{
+											if(pni->epList[j].ep == 1)
+											{
+												tmEp1 = j;
+											}else if(pni->epList[j].ep == 2){
+												tmEp2 = j;
+											}
+										}
+										if(tempAction.UPlugState.relayOnoff == 1)
+										{
+											if(tmEp1 != 0xff)
+											{
+												if(checkDataAllowConditionToAnother(pni->epList[tmEp1].devData.onoffOutStateApp.onOffStatus,
+												    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.uplugStaInput.onoff_r) == 0)
+												    {
+														pgw_info->linkage_list[i].inputInfo.triggering = 1;
+												    }
+											}
+										}else if(tempAction.UPlugState.usbOnoff == 1)
+										{
+											if(tmEp2 != 0xff)
+											{
+												if(checkDataAllowConditionToAnother(pni->epList[tmEp2].devData.onoffOutStateApp.onOffStatus,
+												    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.uplugStaInput.onoff_u) == 0)
+												    {
+														pgw_info->linkage_list[i].inputInfo.triggering = 1;
+												    }
+											}
+										}
+									
+										break;
+									case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+										printf("trigger linkage for smart plug\r\n");
+										if(tempAction.SPlugState.relayOnoff == 1)
+										{
+											if(checkDataAllowConditionToAnother(pni->epList[0].devData.splugStateApp.onOffStatus,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.splugStaInput.onoff) == 0)
+											    {
+													pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											    }
+										}else if(tempAction.SPlugState.power_w == 1)
+										{
+											if(checkDataAllowConditionToAnother(pni->epList[0].devData.splugStateApp.InstantaneousDemand,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.splugStaInput.power_kw) == 0)
+											    {
+													pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											    }
+										}
+										
+										break;
+									case NODE_INFO_TYPE_MAGNET_DOOR:
+									case NODE_INFO_TYPE_WATER_SENSOR:
+									case NODE_INFO_TYPE_PIR_SENSOR:
+									case NODE_INFO_TYPE_SMOKE_SENSOR:
+									case NODE_INFO_TYPE_GAS_SENSOR:
+									case NODE_INFO_TYPE_CO_SENSOR:
+									case NODE_INFO_TYPE_SOS:
+									case NODE_INFO_TYPE_VIBRATION:
+										printf("trigger linkage for ias dev\r\n");
+										if(tempAction.IASState.onoff == 1)
+										{
+											if(checkDataAllowConditionToAnother(pni->epList[0].devData.zoneStateApp.alarms,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.iasStaInput.onoff) == 0)
+											    {
+													pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											    }
+										}
+									
+										break;
+									case NODE_INFO_TYPE_REMOTE_CONTROL:
+										printf("trigger linkage for ace dev\r\n");
+										if(tempAction.ACEState.onoff == 1)
+										{
+											if(checkDataAllowConditionToAnother(pni->epList[0].devData.aceStateApp.station,
+											    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.aceStaInput.onoff) == 0)
+											    {
+													pgw_info->linkage_list[i].inputInfo.triggering = 1;
+											    }
+										}
+								
+										break;
+									case NODE_INFO_TYPE_TEMP_HUM_SENSOR:
+										printf("trigger linkage for THP dev\r\n");
+										for(j = 0; j < pni->epNum; j ++)
+										{
+											if(pni->epList[j].ep == 1)
+											{
+												tmEp1 = j;
+											}else if(pni->epList[j].ep == 2){
+												tmEp2 = j;
+											}
+										}
+										if(tempAction.THPState.temp == 1)
+										{
+											if(tmEp1 != 0xff)
+											{
+												if(checkDataAllowConditionToAnother(pni->epList[tmEp1].devData.tempStateApp.tempMeterage,
+												    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.thpStaInput.tempValue) == 0)
+												    {
+														pgw_info->linkage_list[i].inputInfo.triggering = 1;
+												    }
+											 }  
+										}else if(tempAction.THPState.humi == 1)
+										{
+											if(tmEp2 != 0xff)
+											{
+												if(checkDataAllowConditionToAnother(pni->epList[tmEp2].devData.humiStateApp.humiMeterage,
+												    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.thpStaInput.humiValue) == 0)
+												    {
+														pgw_info->linkage_list[i].inputInfo.triggering = 1;
+												    }
+											 }  
+										}
+										
+										break;
+									default:
+										break;
+								}
+							}
+						}else if(type == SCENE_LIST_GW_PAYLOAD){
+							//一般不做为触发条件，网关为常作为检查条件或者输出条件
+							printf("check gw state trigget linkage\r\n");
+							if(tempAction.GWStat.gwlightonoff == 1)
+							{
+								if(checkDataAllowConditionToAnother(hmIotsDevInfo.light_onoff,
+								    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.gwStaInput.lightOnoff) == 0)
+								    {
+										pgw_info->linkage_list[i].inputInfo.triggering = 1;
+								    }
+							}else if(tempAction.GWStat.armtype == 1)
+							{
+								if(checkDataAllowConditionToAnother(hmIotsDevInfo.light_onoff,
+								    pgw_info->linkage_list[i].inputInfo.action,pgw_info->linkage_list[i].inputInfo.IN.devIn.devData.gwStaInput.lightOnoff) == 0)
+								    {
+										pgw_info->linkage_list[i].inputInfo.triggering = 1;
+								    }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+/*************************************************************************
+联动check条件检测，如果该条件满足，则返回0，不满足
+则返回-1，如果该条件非法(zb 设备已经被删除)返回-2，
+调用该函数的地方可以判断返回值来做相应的操作，如果
+检测返回值为-2，则删除该条件，同时检测条件的num也要
+减1
+*************************************************************************/
+int userCheckLinkageStateFunc(CHCEKINFO check)
+{
+	int ret = 0;
+	uint8_t j;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t checkNum = 0;
+	uint8_t tmEp1 = 0xff,tmEp2 = 0xff, tmEp3 = 0xff,tmEp4 = 0xff;
+	if(check.type == SCENE_LIST_GW_PAYLOAD)
+	{
+		printf("linkage exe check for gw\r\n");
+		if(check.check.devCheck.devAction.GWStat.gwlightonoff == 1)
+		{
+			checkNum ++;
+			if(checkDataAllowConditionToAnother(hmIotsDevInfo.light_onoff,
+			    check.action,check.check.devCheck.devData.gwStaInput.lightOnoff) != 0)
+			    {
+					ret = -1;
+			    }
+		}
+		if(check.check.devCheck.devAction.GWStat.armtype == 1)
+		{
+			checkNum ++;
+			if(checkDataAllowConditionToAnother(hmIotsDevInfo.sensor_arm_type,
+			    check.action,check.check.devCheck.devData.gwStaInput.armType) != 0)
+			    {
+					ret = -1;
+			    }
+		}
+		if(checkNum == 0)
+		{
+			ret = -2;
+		}
+	}else if(check.type == SCENE_LIST_ZB_DEV_PAYLOAD){
+		printf("linkage exe check for zb dev\r\n");
+		pni_temp = findInDevListByIndex(check.check.devCheck.targetId);
+		if(pni_temp != NULL)
+		{
+			switch(pni_temp->devType)
+			{
+				case NODE_INFO_TYPE_LIGHT_RGB:
+					printf("exe linkage check for RGB\r\n");
+					if(check.check.devCheck.devAction.RGBState.onoff == 1)
+					{
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[0].devData.colorStateApp.onOffStatus,
+						    check.action,check.check.devCheck.devData.rgbStaInput.onoff) != 0)
+						    {
+								ret = -1;
+						    }
+					}
+					if(checkNum == 0)
+					{
+						ret = -2;
+					}
+					break;
+				case NODE_INFO_TYPE_AI1SW:
+				case NODE_INFO_TYPE_AI2SW:
+				case NODE_INFO_TYPE_AI3SW:
+					printf("exe linkage check for switch\r\n");
+					for(j = 0; j < pni_temp->epNum; j ++)
+					{
+						if(pni_temp->epList[j].ep == 1)
+						{
+							tmEp1 = j;
+						}else if(pni_temp->epList[j].ep == 2){
+							tmEp2 = j;
+						}else if(pni_temp->epList[j].ep == 3){
+							tmEp3 = j;
+						}
+					}
+					if(check.check.devCheck.devAction.SWState.onoff1 == 1)
+					{
+						if(tmEp1 != 0xff)
+						{
+							checkNum ++;
+							if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp1].devData.witchStateApp.onOffStatus,
+							    check.action,check.check.devCheck.devData.swStaInput.onoff1) != 0)
+							    {
+									ret = -1;
+							    }
+						}
+					}
+					if(check.check.devCheck.devAction.SWState.onoff2 == 1)
+					{
+						if(tmEp2 != 0xff)
+						{
+							checkNum ++;
+							if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp2].devData.witchStateApp.onOffStatus,
+							    check.action,check.check.devCheck.devData.swStaInput.onoff2) != 0)
+							    {
+									ret = -1;
+							    }
+						}
+					}
+					if(check.check.devCheck.devAction.SWState.onoff3 == 1)
+					{
+						if(tmEp3 != 0xff)
+						{
+							checkNum ++;
+							if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp3].devData.witchStateApp.onOffStatus,
+							    check.action,check.check.devCheck.devData.swStaInput.onoff3) != 0)
+							    {
+									ret = -1;
+							    }
+						}
+					}
+					if(checkNum == 0)
+					{
+						ret = -2;
+					}
+					break;
+				case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+					printf("exe linkage check for cut rgb\r\n");
+					for(j = 0; j < pni_temp->epNum; j ++)
+					{
+						if(pni_temp->epList[j].ep == 1)
+						{
+							tmEp1 = j;
+						}else if(pni_temp->epList[j].ep == 2){
+							tmEp2 = j;
+						}else if(pni_temp->epList[j].ep == 3){
+							tmEp3 = j;
+						}else if(pni_temp->epList[j].ep == 4){
+							tmEp4 = j;
+						}
+					}
+					if(check.check.devCheck.devAction.CUTRGBState.onoffList1 == 1)
+					{
+
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp1].devData.cstRgbStateApp.onOffStatus,
+						    check.action,check.check.devCheck.devData.cutRgbInput.onoff1) != 0)
+						    {
+								ret = -1;
+						    }
+						
+					}
+					if(check.check.devCheck.devAction.CUTRGBState.onoffList2 == 1)
+					{
+
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp2].devData.cstRgbStateApp.onOffStatus,
+						    check.action,check.check.devCheck.devData.cutRgbInput.onoff2) != 0)
+						    {
+								ret = -1;
+						    }
+						
+					}
+					if(check.check.devCheck.devAction.CUTRGBState.onoffList3 == 1)
+					{
+
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp3].devData.cstRgbStateApp.onOffStatus,
+						    check.action,check.check.devCheck.devData.cutRgbInput.onoff3) != 0)
+						    {
+								ret = -1;
+						    }
+						
+					}
+					if(check.check.devCheck.devAction.CUTRGBState.onoffList4 == 1)
+					{
+
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp4].devData.cstRgbStateApp.onOffStatus,
+						    check.action,check.check.devCheck.devData.cutRgbInput.onoff4) != 0)
+						    {
+								ret = -1;
+						    }
+						
+					}
+					
+					if(checkNum == 0)
+					{
+						ret = -2;
+					}
+					break;
+				case NODE_INFO_TYPE_RELAY_CONTROL:
+					printf("exe linkage check for relay\r\n");
+					break;
+				case NODE_INFO_TYPE_AI_SOCKET_USB:
+					printf("exe linkage check for usb plug\r\n");
+					for(j = 0; j < pni_temp->epNum; j ++)
+					{
+						if(pni_temp->epList[j].ep == 1)
+						{
+							tmEp1 = j;
+						}else if(pni_temp->epList[j].ep == 2){
+							tmEp2 = j;
+						}
+					}
+					if(check.check.devCheck.devAction.UPlugState.relayOnoff == 1)
+					{
+						if(tmEp1 != 0xff)
+						{
+							checkNum ++;
+							if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp1].devData.onoffOutStateApp.onOffStatus,
+							    check.action,check.check.devCheck.devData.uplugStaInput.onoff_r) != 0)
+							    {
+									ret = -1;
+							    }
+						}
+					}
+					if(check.check.devCheck.devAction.UPlugState.usbOnoff == 1)
+					{
+						if(tmEp2 != 0xff)
+						{
+							checkNum ++;
+							if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp2].devData.onoffOutStateApp.onOffStatus,
+							    check.action,check.check.devCheck.devData.uplugStaInput.onoff_u) != 0)
+							    {
+									ret = -1;
+							    }
+						}
+					}
+					if(checkNum == 0)
+					{
+						ret = -2;
+					}
+					break;
+				case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+					printf("exe linkage check for smart plug\r\n");
+					
+					if(check.check.devCheck.devAction.SPlugState.relayOnoff == 1)
+					{
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[0].devData.splugStateApp.onOffStatus,
+						    check.action,check.check.devCheck.devData.splugStaInput.onoff) != 0)
+						    {
+								ret = -1;
+						    }
+					}
+					if(check.check.devCheck.devAction.SPlugState.power_w == 1)
+					{
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[0].devData.splugStateApp.InstantaneousDemand,
+						    check.action,check.check.devCheck.devData.splugStaInput.power_kw) != 0)
+						    {
+								ret = -1;
+						    }
+					}
+					if(checkNum == 0)
+					{
+						ret = -2;
+					}
+					break;
+				case NODE_INFO_TYPE_MAGNET_DOOR:
+				case NODE_INFO_TYPE_WATER_SENSOR:
+				case NODE_INFO_TYPE_PIR_SENSOR:
+				case NODE_INFO_TYPE_SMOKE_SENSOR:
+				case NODE_INFO_TYPE_GAS_SENSOR:
+				case NODE_INFO_TYPE_CO_SENSOR:
+				case NODE_INFO_TYPE_SOS:
+					printf("exe linkage input for ias dev\r\n");
+					if(check.check.devCheck.devAction.IASState.onoff == 1)
+					{
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[0].devData.zoneStateApp.alarms,
+						    check.action,check.check.devCheck.devData.iasStaInput.onoff) != 0)
+						    {
+								ret = -1;
+						    }
+					}
+					if(checkNum == 0)
+					{
+						ret = -2;
+					}
+					break;
+				case NODE_INFO_TYPE_REMOTE_CONTROL:
+					printf("exe linkage check for ace dev\r\n");
+					if(check.check.devCheck.devAction.ACEState.onoff == 1)
+					{
+						checkNum ++;
+						if(checkDataAllowConditionToAnother(pni_temp->epList[0].devData.aceStateApp.station,
+						    check.action,check.check.devCheck.devData.aceStaInput.onoff) != 0)
+						    {
+								ret = -1;
+						    }
+					}
+					if(checkNum == 0)
+					{
+						ret = -2;
+					}
+					break;
+				case NODE_INFO_TYPE_TEMP_HUM_SENSOR:
+					printf("exe linkage check for THP dev\r\n");
+					for(j = 0; j < pni_temp->epNum; j ++)
+					{
+						if(pni_temp->epList[j].ep == 1)
+						{
+							tmEp1 = j;
+						}else if(pni_temp->epList[j].ep == 2){
+							tmEp2 = j;
+						}
+					}
+					if(check.check.devCheck.devAction.THPState.temp == 1)
+					{
+						if(tmEp1 != 0xff)
+						{
+							checkNum ++;
+							if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp1].devData.tempStateApp.tempMeterage,
+							    check.action,check.check.devCheck.devData.thpStaInput.tempValue) != 0)
+							    {
+									ret = -1;
+							    }
+						}
+					}
+					if(check.check.devCheck.devAction.THPState.humi == 1)
+					{
+						if(tmEp2 != 0xff)
+						{
+							checkNum ++;
+							if(checkDataAllowConditionToAnother(pni_temp->epList[tmEp2].devData.humiStateApp.humiMeterage,
+							    check.action,check.check.devCheck.devData.thpStaInput.humiValue) != 0)
+							    {
+									ret = -1;
+							    }
+						}
+					}
+					if(checkNum == 0)
+					{
+						ret = -2;
+					}
+					break;
+				default:
+					ret = -1;
+					break;
+			}
+		}else{
+			printf("the dev was not in dev list\r\n");
+			ret = -2;
+		}
+	}else if(check.type == SCENE_LIST_TIMER_PAYLOAD){
+		printf("linkage exe check for time\r\n");
+		if(gwStateForRealTime.sysRealTimerValid == 1)
+		{
+			if(is_time_achieve_hm((check.check.timeCheck.wk_flag & 0x80),
+								check.check.timeCheck.s_hour,
+								check.check.timeCheck.s_min,
+								check.check.timeCheck.e_hour,
+								check.check.timeCheck.e_min,
+								check.check.timeCheck.wk_flag) == 0)
+								{
+									ret = -1;
+								}
+		}else{
+			ret = -1;
+		}
+
+	}else if(check.type == SCENE_LIST_EVIROMENT_LIGHT_PAYLOAD){
+		printf("linkage exe check for enviroment light\r\n");
+		if(checkDataAllowConditionToAnother(gwStateForRealTime.environment_lux,
+		    check.action,check.check.eviromentLight) != 0)
+		    {
+				ret = -1;
+		    }
+	}else{
+		ret = -2;//该check条件非法，删除该check条件
+	}
+	return ret;
+}
+
+
+void userLinkageEventLoopFunc(void)
+{
+	uint8_t i,j;
+	uint8_t checkNum = 0;
+	uint8_t outputNum = 0;
+	uint8_t checkSuccess = 0;
+	uint8_t linkageFlashSaveFlag = 0;
+	uint8_t devNumFlashSaveFlag = 0;
+	int status;
+	HM_GW_LIST *pgw_info=&gw_info;
+	for(i = 0; i < MAX_LINKAGE_NUM; i ++)
+	{
+		if(devNumInfo.linkageIndex[i] != INVALID_SCENE_LINKAGE_INDEX)
+		{
+			if(pgw_info->linkage_list[i].Enable == 0)
+			{
+				continue;
+			}
+			if(pgw_info->linkage_list[i].inputInfo.triggering == 1)
+			{
+				checkNum = 0;
+				checkSuccess = 0;
+				printf("linkage start check info\r\n");
+				for(j = 0; j < MAX_CHECK_NUM; j ++)//check info
+				{
+					if(pgw_info->linkage_list[i].checkInfo[j].valid == 1)
+					{
+						status = userCheckLinkageStateFunc(pgw_info->linkage_list[i].checkInfo[j]);
+						if(status == 0)//success
+						{
+							checkNum ++;
+						}else if(status == -2){//faild and need remove the checkinfo
+							memset((char*)&pgw_info->linkage_list[i].checkInfo[j],0,sizeof(CHCEKINFO));
+							linkageFlashSaveFlag = 1;
+							pgw_info->linkage_list[i].checkNum -- ;
+						}
+					}
+				}
+
+				if(checkNum == pgw_info->linkage_list[i].checkNum)
+				{
+					checkSuccess = 1;
+					printf("linkage check info success\r\n");
+				}
+
+
+				if(checkSuccess == 1)
+				{
+					printf("linkage start output\r\n");
+					outputNum = 0;
+	
+					for(j = 0; j < MAX_OUTPUT_NUM; j ++)//output
+					{
+						if(pgw_info->linkage_list[i].outputInfo[j].valid == 1)
+						{
+							status = userDealLinkageForOutputBuf(pgw_info->linkage_list[i].outputInfo[j]);
+							if(status == 0)
+							{
+								outputNum ++;
+							}else if(status == -2){
+								memset((char*)&pgw_info->linkage_list[i].outputInfo[j],0,sizeof(OUTPUTINFO));
+								linkageFlashSaveFlag = 1;
+								pgw_info->linkage_list[i].outputNum-- ;
+							}
+						}
+					}
+
+					if(outputNum == 0)
+					{
+						devNumFlashSaveFlag = 1;
+						memset((char*)&pgw_info->linkage_list[i],0,sizeof(LINKAGEINFO));
+						devNumInfo.linkageIndex[i] = INVALID_SCENE_LINKAGE_INDEX;
+						devNumInfo.linkageNum -- ;
+					}
+				}
+				pgw_info->linkage_list[i].inputInfo.triggering = 0;
+				if(linkageFlashSaveFlag == 1)
+				{
+					userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[i],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ i * BASIC_SCENE_INFO_SIZE,sizeof(LINKAGEINFO));
+					linkageFlashSaveFlag = 0;
+				}
+			}
+			
+		}
+	}
+
+	if(devNumFlashSaveFlag == 1)
+	{
+		userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+	}
+}
+
+
+
+
+json_t* userCreatDevSceneAndLinkageOutputSetingJsonData(OUTPUTINFO output)
+{
+	json_t *js_se,*onoffList,*brigList,*colorList;
+	int ret = 0;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t jsseActionNum = 0;
+	printf("read linkage output:%d\r\n",output.devAction.modeByte);
+	if(output.devAction.modeByte == 0)
+	{
+		return NULL;
+	}
+	js_se = json_create_object();
+	if(output.type == SCENE_LIST_ZB_DEV_PAYLOAD)
+	{
+		printf("read output zb dev\r\n");
+		pni_temp = findInDevListByIndex(output.targetId);
+		if(pni_temp != NULL)
+		{
+			switch(pni_temp->devType)
+			{
+				case NODE_INFO_TYPE_LIGHT_RGB:
+					if(output.devAction.RGBSet.onoff == 1)
+					{
+						json_add_item_to_object(js_se,"OF",json_create_number(output.devData.rgbOutput.onoff));
+						jsseActionNum ++;
+					}
+					if(output.devAction.RGBSet.level == 1)
+					{
+						json_add_item_to_object(js_se,"LE",json_create_number(output.devData.rgbOutput.level));
+						jsseActionNum ++;
+					}
+					if(output.devAction.RGBSet.colour_r == 1)
+					{
+						json_add_item_to_object(js_se,"CR",json_create_number(output.devData.rgbOutput.rgb_r));
+						jsseActionNum ++;
+					}
+					if(output.devAction.RGBSet.colour_g == 1)
+					{
+						json_add_item_to_object(js_se,"CG",json_create_number(output.devData.rgbOutput.rgb_g));
+						jsseActionNum ++;
+					}
+					if(output.devAction.RGBSet.colour_b == 1)
+					{
+						json_add_item_to_object(js_se,"CB",json_create_number(output.devData.rgbOutput.rgb_b));
+						jsseActionNum ++;
+					}
+					break;
+				case NODE_INFO_TYPE_AI1SW:
+				case NODE_INFO_TYPE_AI2SW:
+				case NODE_INFO_TYPE_AI3SW:
+					if(output.devAction.SWSet.onoff1 == 1)
+					{
+						json_add_item_to_object(js_se,"OF1",json_create_number(output.devData.switchOutput.onoff1));
+						jsseActionNum ++;
+					}
+					if(output.devAction.SWSet.onoff2 == 1)
+					{
+						json_add_item_to_object(js_se,"OF2",json_create_number(output.devData.switchOutput.onoff2));
+						jsseActionNum ++;
+					}
+					if(output.devAction.SWSet.onoff3 == 1)
+					{
+						json_add_item_to_object(js_se,"OF3",json_create_number(output.devData.switchOutput.onoff3));
+						jsseActionNum ++;
+					}
+					break;
+				case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+
+
+					if((output.devAction.CUTRGBSet.onoffList1 == 1) || (output.devAction.CUTRGBSet.onoffList2 == 1) || (output.devAction.CUTRGBSet.onoffList3 == 1) || (output.devAction.CUTRGBSet.onoffList4 == 1))
+					{
+						json_add_item_to_object(js_se, "OFL", onoffList = json_create_array());
+						if(output.devAction.CUTRGBSet.onoffList1)
+						{
+							json_add_item_toarray(onoffList, json_create_number(output.devData.cutRgbOutput.onoff1));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.onoffList2)
+						{
+							json_add_item_toarray(onoffList, json_create_number(output.devData.cutRgbOutput.onoff2));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.onoffList3)
+						{
+							json_add_item_toarray(onoffList, json_create_number(output.devData.cutRgbOutput.onoff3));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.onoffList4)
+						{
+							json_add_item_toarray(onoffList, json_create_number(output.devData.cutRgbOutput.onoff4));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+					}
+
+
+					if((output.devAction.CUTRGBSet.brightnessList1 == 1) || (output.devAction.CUTRGBSet.brightnessList2 == 1) || (output.devAction.CUTRGBSet.brightnessList3 == 1) || (output.devAction.CUTRGBSet.brightnessList4 == 1))
+					{
+						json_add_item_to_object(js_se, "LEL", brigList = json_create_array());
+						if(output.devAction.CUTRGBSet.brightnessList1)
+						{
+							json_add_item_toarray(brigList, json_create_number(output.devData.cutRgbOutput.brightness1));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(brigList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.brightnessList2)
+						{
+							json_add_item_toarray(brigList, json_create_number(output.devData.cutRgbOutput.brightness2));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(brigList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.brightnessList3)
+						{
+							json_add_item_toarray(brigList, json_create_number(output.devData.cutRgbOutput.brightness3));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(brigList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.brightnessList4)
+						{
+							json_add_item_toarray(brigList, json_create_number(output.devData.cutRgbOutput.brightness4));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(brigList, json_create_number(-1));
+						}
+					}
+
+					if((output.devAction.CUTRGBSet.colorTempList1 == 1) || (output.devAction.CUTRGBSet.colorTempList2 == 1) || (output.devAction.CUTRGBSet.colorTempList3 == 1) || (output.devAction.CUTRGBSet.colorTempList4 == 1))
+					{
+						json_add_item_to_object(js_se, "CWL", colorList = json_create_array());
+						if(output.devAction.CUTRGBSet.colorTempList1)
+						{
+							json_add_item_toarray(colorList, json_create_number(output.devData.cutRgbOutput.colorTemp1));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(colorList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.colorTempList2)
+						{
+							json_add_item_toarray(colorList, json_create_number(output.devData.cutRgbOutput.colorTemp2));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(colorList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.colorTempList3)
+						{
+							json_add_item_toarray(colorList, json_create_number(output.devData.cutRgbOutput.colorTemp3));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(colorList, json_create_number(-1));
+						}
+
+						if(output.devAction.CUTRGBSet.colorTempList4)
+						{
+							json_add_item_toarray(colorList, json_create_number(output.devData.cutRgbOutput.colorTemp4));
+							jsseActionNum ++;
+						}else{
+							json_add_item_toarray(colorList, json_create_number(-1));
+						}
+					}
+					break;
+				case NODE_INFO_TYPE_ZB_IR_TRANSPONDER:
+					break;
+				case NODE_INFO_TYPE_RELAY_CONTROL:
+					break;
+				case NODE_INFO_TYPE_PIR_SENSOR:
+				case NODE_INFO_TYPE_MAGNET_DOOR:
+					
+					break;
+				case NODE_INFO_TYPE_WATER_SENSOR:
+				case NODE_INFO_TYPE_GAS_SENSOR:
+				case NODE_INFO_TYPE_SMOKE_SENSOR:
+				case NODE_INFO_TYPE_CO_SENSOR:
+				case NODE_INFO_TYPE_REMOTE_CONTROL:
+				case NODE_INFO_TYPE_SOS:
+					break;
+				case NODE_INFO_TYPE_TEMP_HUM_SENSOR:
+					
+					break;
+				
+				case NODE_INFO_TYPE_WARNING_DEV:
+					if(output.devAction.WDSet.onoff == 1)
+					{
+						json_add_item_to_object(js_se,"OF",json_create_number(output.devData.wdOutput.onoff));
+						jsseActionNum ++;
+					}
+					break;
+
+				case NODE_INFO_TYPE_ILLUMINATION:
+					break;
+				case NODE_INFO_TYPE_AIR_QUALITY:
+					break;
+				case NODE_INFO_TYPE_THERMOSTAT:
+					break;
+				case NODE_INFO_TYPE_AI_SOCKET_USB:
+					if(output.devAction.UPlugSet.relayOnoff == 1)
+					{
+						json_add_item_to_object(js_se,"RO",json_create_number(output.devData.uplugOutput.onoff_r));
+						jsseActionNum ++;
+					}
+					if(output.devAction.UPlugSet.usbOnoff == 1)
+					{
+						json_add_item_to_object(js_se,"UO",json_create_number(output.devData.uplugOutput.onoff_u));
+						jsseActionNum ++;
+					}
+					break;
+				case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+					if(output.devAction.SPlugSet.relayOnoff == 1)
+					{
+						json_add_item_to_object(js_se,"RO",json_create_number(output.devData.splugOutput.onoff));
+						jsseActionNum ++;
+					}
+					break;
+				default:
+					break;
+			}
+		}
+	}else if(output.type == SCENE_LIST_GW_PAYLOAD){
+		printf("read output gw\r\n");
+		if(output.devAction.GWStat.armtype == 1)
+		{
+
+			json_add_item_to_object(js_se,"AT",json_create_number(output.devData.gwOutput.armType));
+			jsseActionNum ++;
+		}
+		if(output.devAction.GWStat.gwlightonoff == 1)
+		{
+			json_add_item_to_object(js_se,"LO",json_create_number(output.devData.gwOutput.lightOnoff));
+			jsseActionNum ++;
+		}
+	}else{
+		printf("read linkage unknow type\r\n");
+		ret = -1;
+	}
+
+
+	if(jsseActionNum == 0)
+	{
+		ret = -1;
+	}
+	if(ret == -1)
+	{
+		if(js_se != NULL)
+		{
+			json_delete(js_se);
+			js_se = NULL;
+		}
+	}
+	return js_se;
+	
+}
+
+
+
+
+json_t* userCreatDevLinkageInputStaJsonData(INPUTINFO input)
+{
+	json_t *js_ss,*onoffList;
+	int ret = 0;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t jsssActionNum = 0;
+	int16_t cpdata;
+	int16_t tempdata;
+	char dot[10];
+	char tempstring[10];
+	if(input.IN.devIn.devAction.modeByte == 0)
+	{
+		return NULL;
+	}
+	js_ss = json_create_object();
+	if(input.type == SCENE_LIST_ZB_DEV_PAYLOAD)
+	{
+		pni_temp = findInDevListByIndex(input.IN.devIn.targetId);
+		if(pni_temp != NULL)
+		{
+			switch(pni_temp->devType)
+			{
+				case NODE_INFO_TYPE_LIGHT_RGB:
+					printf("read linkage input for RGB\r\n");
+					if(input.IN.devIn.devAction.RGBState.onoff == 1)
+					{
+						json_add_item_to_object(js_ss,"OF",json_create_number(input.IN.devIn.devData.rgbStaInput.onoff));
+						jsssActionNum ++;
+					}
+					break;
+				case NODE_INFO_TYPE_AI1SW:
+				case NODE_INFO_TYPE_AI2SW:
+				case NODE_INFO_TYPE_AI3SW:
+					printf("read linkage input for switch\r\n");
+
+					if(input.IN.devIn.devAction.SWState.onoff1 == 1)
+					{
+						json_add_item_to_object(js_ss,"OF1",json_create_number(input.IN.devIn.devData.swStaInput.onoff1));
+						jsssActionNum ++;
+					}else if(input.IN.devIn.devAction.SWState.onoff2 == 1)
+					{
+						json_add_item_to_object(js_ss,"OF2",json_create_number(input.IN.devIn.devData.swStaInput.onoff2));
+						jsssActionNum ++;
+					}else if(input.IN.devIn.devAction.SWState.onoff3 == 1)
+					{
+						json_add_item_to_object(js_ss,"OF3",json_create_number(input.IN.devIn.devData.swStaInput.onoff3));
+						jsssActionNum ++;
+					}
+					
+					break;
+				case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+					printf("read linkage input for cut rgb\r\n");
+					if((input.IN.devIn.devAction.CUTRGBState.onoffList1 == 1) || (input.IN.devIn.devAction.CUTRGBState.onoffList2 == 1) || (input.IN.devIn.devAction.CUTRGBState.onoffList3 == 1) || (input.IN.devIn.devAction.CUTRGBState.onoffList4 == 1))
+					{
+						json_add_item_to_object(js_ss, "OFL", onoffList = json_create_array());
+						if(input.IN.devIn.devAction.CUTRGBState.onoffList1)
+						{
+							json_add_item_toarray(onoffList, json_create_number(input.IN.devIn.devData.cutRgbInput.onoff1));
+							jsssActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(input.IN.devIn.devAction.CUTRGBState.onoffList2)
+						{
+							json_add_item_toarray(onoffList, json_create_number(input.IN.devIn.devData.cutRgbInput.onoff2));
+							jsssActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(input.IN.devIn.devAction.CUTRGBState.onoffList3)
+						{
+							json_add_item_toarray(onoffList, json_create_number(input.IN.devIn.devData.cutRgbInput.onoff3));
+							jsssActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(input.IN.devIn.devAction.CUTRGBState.onoffList4)
+						{
+							json_add_item_toarray(onoffList, json_create_number(input.IN.devIn.devData.cutRgbInput.onoff4));
+							jsssActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+					}
+					
+					break;
+				case NODE_INFO_TYPE_RELAY_CONTROL:
+					printf("read linkage input for relay\r\n");
+					break;
+				case NODE_INFO_TYPE_AI_SOCKET_USB:
+					printf("read linkage input for usb plug\r\n");
+					if(input.IN.devIn.devAction.UPlugState.relayOnoff == 1)
+					{
+						json_add_item_to_object(js_ss,"RO",json_create_number(input.IN.devIn.devData.uplugStaInput.onoff_r));
+						jsssActionNum ++;
+					}else if(input.IN.devIn.devAction.UPlugState.usbOnoff == 1)
+					{
+						json_add_item_to_object(js_ss,"PW",json_create_number(input.IN.devIn.devData.uplugStaInput.onoff_u));
+						jsssActionNum ++;
+					}
+				
+					break;
+				case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+					printf("read linkage input for smart plug\r\n");
+					if(input.IN.devIn.devAction.SPlugState.relayOnoff == 1)
+					{
+						json_add_item_to_object(js_ss,"RO",json_create_number(input.IN.devIn.devData.splugStaInput.onoff));
+						jsssActionNum ++;
+					}else if(input.IN.devIn.devAction.SPlugState.power_w == 1)
+					{
+						json_add_item_to_object(js_ss,"RO",json_create_number(input.IN.devIn.devData.splugStaInput.power_kw));
+						jsssActionNum ++;
+					}
+					
+					break;
+				case NODE_INFO_TYPE_MAGNET_DOOR:
+				case NODE_INFO_TYPE_WATER_SENSOR:
+				case NODE_INFO_TYPE_PIR_SENSOR:
+				case NODE_INFO_TYPE_SMOKE_SENSOR:
+				case NODE_INFO_TYPE_GAS_SENSOR:
+				case NODE_INFO_TYPE_CO_SENSOR:
+				case NODE_INFO_TYPE_SOS:
+					printf("read linkage input for ias dev\r\n");
+					if(input.IN.devIn.devAction.IASState.onoff == 1)
+					{
+						json_add_item_to_object(js_ss,"OF",json_create_number(input.IN.devIn.devData.iasStaInput.onoff));
+						jsssActionNum ++;
+					}
+				
+					break;
+				case NODE_INFO_TYPE_REMOTE_CONTROL:
+					printf("read linkage input for ace dev\r\n");
+					if(input.IN.devIn.devAction.ACEState.onoff == 1)
+					{
+						json_add_item_to_object(js_ss,"OF",json_create_number(input.IN.devIn.devData.aceStaInput.onoff));
+						jsssActionNum ++;
+					}
+			
+					break;
+				case NODE_INFO_TYPE_TEMP_HUM_SENSOR:
+					printf("read linkage input for THP dev\r\n");
+					memset(dot,'\0',10);
+					memset(tempstring,'\0',10);
+					if(input.IN.devIn.devAction.THPState.temp == 1)
+					{
+						tempdata = input.IN.devIn.devData.thpStaInput.tempValue / 10;
+						cpdata = tempdata % 10;
+						sprintf(dot, "%d", cpdata);
+						sprintf(tempstring,"%d.%s",tempdata / 10,dot);// 1位小数点，保存值跟实际值是100倍的关系
+						json_add_item_to_object(js_ss,"TP",json_create_string(tempstring));
+						jsssActionNum ++;
+					}else if(input.IN.devIn.devAction.THPState.humi == 1)
+					{
+						tempdata = input.IN.devIn.devData.thpStaInput.humiValue / 10;
+						cpdata = tempdata % 10;
+						sprintf(dot, "%d", cpdata);
+						sprintf(tempstring,"%d.%s",tempdata / 10,dot);// 1位小数点，保存值跟实际值是100倍的关系
+						json_add_item_to_object(js_ss,"HY",json_create_string(tempstring));
+						jsssActionNum ++;
+					}
+					
+					break;
+				default:
+					ret = -1;
+					break;
+			}
+		}
+	}else if(input.type == SCENE_LIST_GW_PAYLOAD){
+		if(input.IN.devIn.devAction.GWStat.gwlightonoff == 1)
+		{
+			json_add_item_to_object(js_ss,"LO",json_create_number(input.IN.devIn.devData.gwStaInput.lightOnoff));
+			jsssActionNum ++;
+		}else if(input.IN.devIn.devAction.GWStat.armtype == 1)
+		{
+			json_add_item_to_object(js_ss,"LO",json_create_number(input.IN.devIn.devData.gwStaInput.armType));
+			jsssActionNum ++;
+		}
+	}else{
+		ret = -1;
+	}
+	if(jsssActionNum != 1)
+	{
+		ret = -1;
+	}
+	if(ret == -1)
+	{
+		if(js_ss != NULL)
+		{
+			json_delete(js_ss);
+			js_ss = NULL;
+		}
+	}
+	return js_ss;
+}
+
+
+json_t* userCreatDevLinkageCheckStaJsonData(CHCEKINFO check)
+{
+	json_t *js_ss,*onoffList;
+	int ret = 0;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t jsssActionNum = 0;
+	int16_t cpdata;
+	int16_t tempdata;
+	char dot[10];
+	char tempstring[10];
+	if(check.check.devCheck.devAction.modeByte == 0)
+	{
+		return NULL;
+	}
+	js_ss = json_create_object();
+
+	if(check.type == SCENE_LIST_ZB_DEV_PAYLOAD)
+	{
+		pni_temp = findInDevListByIndex(check.check.devCheck.targetId);
+		if(pni_temp != NULL)
+		{
+			switch(pni_temp->devType)
+			{
+				case NODE_INFO_TYPE_LIGHT_RGB:
+					printf("read linkage check for RGB\r\n");
+					if(check.check.devCheck.devAction.RGBState.onoff == 1)
+					{
+						json_add_item_to_object(js_ss,"OF",json_create_number(check.check.devCheck.devData.rgbStaInput.onoff));
+						jsssActionNum ++;
+					}
+					break;
+				case NODE_INFO_TYPE_AI1SW:
+				case NODE_INFO_TYPE_AI2SW:
+				case NODE_INFO_TYPE_AI3SW:
+					printf("read linkage check for switch\r\n");
+
+					if(check.check.devCheck.devAction.SWState.onoff1 == 1)
+					{
+						json_add_item_to_object(js_ss,"OF1",json_create_number(check.check.devCheck.devData.swStaInput.onoff1));
+						jsssActionNum ++;
+					}
+					if(check.check.devCheck.devAction.SWState.onoff2 == 1)
+					{
+						json_add_item_to_object(js_ss,"OF2",json_create_number(check.check.devCheck.devData.swStaInput.onoff2));
+						jsssActionNum ++;
+					}
+					if(check.check.devCheck.devAction.SWState.onoff3 == 1)
+					{
+						json_add_item_to_object(js_ss,"OF3",json_create_number(check.check.devCheck.devData.swStaInput.onoff3));
+						jsssActionNum ++;
+					}
+					
+					break;
+				case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+					printf("read linkage check for cut rgb\r\n");
+					if((check.check.devCheck.devAction.CUTRGBState.onoffList1 == 1) || (check.check.devCheck.devAction.CUTRGBState.onoffList2 == 1) || (check.check.devCheck.devAction.CUTRGBState.onoffList3 == 1) || (check.check.devCheck.devAction.CUTRGBState.onoffList4 == 1))
+					{
+						json_add_item_to_object(js_ss, "OFL", onoffList = json_create_array());
+						if(check.check.devCheck.devAction.CUTRGBState.onoffList1)
+						{
+							json_add_item_toarray(onoffList, json_create_number(check.check.devCheck.devData.cutRgbInput.onoff1));
+							jsssActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(check.check.devCheck.devAction.CUTRGBState.onoffList2)
+						{
+							json_add_item_toarray(onoffList, json_create_number(check.check.devCheck.devData.cutRgbInput.onoff2));
+							jsssActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(check.check.devCheck.devAction.CUTRGBState.onoffList3)
+						{
+							json_add_item_toarray(onoffList, json_create_number(check.check.devCheck.devData.cutRgbInput.onoff3));
+							jsssActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+
+						if(check.check.devCheck.devAction.CUTRGBState.onoffList4)
+						{
+							json_add_item_toarray(onoffList, json_create_number(check.check.devCheck.devData.cutRgbInput.onoff4));
+							jsssActionNum ++;
+						}else{
+							json_add_item_toarray(onoffList, json_create_number(-1));
+						}
+					}
+					break;
+				case NODE_INFO_TYPE_RELAY_CONTROL:
+					printf("read linkage check for relay\r\n");
+					break;
+				case NODE_INFO_TYPE_AI_SOCKET_USB:
+					printf("read linkage check for usb plug\r\n");
+					if(check.check.devCheck.devAction.UPlugState.relayOnoff == 1)
+					{
+						json_add_item_to_object(js_ss,"RO",json_create_number(check.check.devCheck.devData.uplugStaInput.onoff_r));
+						jsssActionNum ++;
+					}
+					if(check.check.devCheck.devAction.UPlugState.usbOnoff == 1)
+					{
+						json_add_item_to_object(js_ss,"PW",json_create_number(check.check.devCheck.devData.uplugStaInput.onoff_u));
+						jsssActionNum ++;
+					}
+				
+					break;
+				case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+					printf("read linkage check for smart plug\r\n");
+					if(check.check.devCheck.devAction.SPlugState.relayOnoff == 1)
+					{
+						json_add_item_to_object(js_ss,"RO",json_create_number(check.check.devCheck.devData.splugStaInput.onoff));
+						jsssActionNum ++;
+					}
+					if(check.check.devCheck.devAction.SPlugState.power_w == 1)
+					{
+						json_add_item_to_object(js_ss,"RO",json_create_number(check.check.devCheck.devData.splugStaInput.power_kw));
+						jsssActionNum ++;
+					}
+					
+					break;
+				case NODE_INFO_TYPE_MAGNET_DOOR:
+				case NODE_INFO_TYPE_WATER_SENSOR:
+				case NODE_INFO_TYPE_PIR_SENSOR:
+				case NODE_INFO_TYPE_SMOKE_SENSOR:
+				case NODE_INFO_TYPE_GAS_SENSOR:
+				case NODE_INFO_TYPE_CO_SENSOR:
+				case NODE_INFO_TYPE_SOS:
+					printf("read linkage input for ias dev\r\n");
+					if(check.check.devCheck.devAction.IASState.onoff == 1)
+					{
+						json_add_item_to_object(js_ss,"OF",json_create_number(check.check.devCheck.devData.iasStaInput.onoff));
+						jsssActionNum ++;
+					}
+				
+					break;
+				case NODE_INFO_TYPE_REMOTE_CONTROL:
+					printf("read linkage check for ace dev\r\n");
+					if(check.check.devCheck.devAction.ACEState.onoff == 1)
+					{
+						json_add_item_to_object(js_ss,"OF",json_create_number(check.check.devCheck.devData.aceStaInput.onoff));
+						jsssActionNum ++;
+					}
+			
+					break;
+				case NODE_INFO_TYPE_TEMP_HUM_SENSOR:
+					printf("read linkage check for THP dev\r\n");
+					memset(dot,'\0',10);
+					memset(tempstring,'\0',10);
+					if(check.check.devCheck.devAction.THPState.temp == 1)
+					{
+						tempdata = check.check.devCheck.devData.thpStaInput.tempValue / 10;
+						cpdata = tempdata % 10;
+						sprintf(dot, "%d", cpdata);
+						sprintf(tempstring,"%d.%s",tempdata / 10,dot);// 1位小数点，保存值跟实际值是100倍的关系
+						json_add_item_to_object(js_ss,"TP",json_create_string(tempstring));
+						jsssActionNum ++;
+					}
+					if(check.check.devCheck.devAction.THPState.humi == 1)
+					{
+						tempdata = check.check.devCheck.devData.thpStaInput.humiValue / 10;
+						cpdata = tempdata % 10;
+						sprintf(dot, "%d", cpdata);
+						sprintf(tempstring,"%d.%s",tempdata / 10,dot);// 1位小数点，保存值跟实际值是100倍的关系
+						json_add_item_to_object(js_ss,"HY",json_create_string(tempstring));
+						jsssActionNum ++;
+					}
+					
+					break;
+				default:
+					ret = -1;
+					break;
+			}
+		}
+	}else if(check.type == SCENE_LIST_GW_PAYLOAD){
+		if(check.check.devCheck.devAction.GWStat.gwlightonoff == 1)
+		{
+			json_add_item_to_object(js_ss,"LO",json_create_number(check.check.devCheck.devData.gwStaInput.lightOnoff));
+			jsssActionNum ++;
+		}
+		if(check.check.devCheck.devAction.GWStat.armtype == 1)
+		{
+			json_add_item_to_object(js_ss,"AT",json_create_number(check.check.devCheck.devData.gwStaInput.armType));
+			jsssActionNum ++;
+		}
+	}else{
+		ret = -1;
+	}
+	if(jsssActionNum == 0)
+	{
+		ret = -1;
+	}
+	if(ret == -1)
+	{
+		if(js_ss != NULL)
+		{
+			json_delete(js_ss);
+			js_ss = NULL;
+		}
+	}
+	return js_ss;
+}
+
+
+
+
+/******************************************************************
+获取联动列表，每一个联动独立一条指令回复给
+app
+******************************************************************/
+void userReadLinkageListFunc(uint32_t sn,uint8_t rcvType,uint32_t appDevId)
+{
+	uint8_t i,j;
+	int ret = 0;
+	json_t *js_pl = NULL,*js_oid = NULL,*js_exe = NULL,*js_EXarray = NULL,*js_se = NULL,*js_COarray = NULL,*js_CEarray = NULL;
+	json_t *js_ss = NULL,*js_in = NULL,*js_tm,*js_ck,*js_ts,*js_te;
+	HM_GW_LIST *pgw_info=&gw_info;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t outputNum = 0;
+	uint8_t outputOption = 0;
+	uint8_t inputOption = 0;
+	uint8_t checkNum = 0;
+	uint8_t checkOption = 0;
+	uint8_t linkInfoSaveToFlash = 0;
+	uint8_t linkNumSaveToFlash = 0;
+	uint8_t linkNum = 0;
+	uint8_t sceneId = INVALID_SCENE_LINKAGE_INDEX;
+	//遍历整个联动表
+	for(i = 0; i < MAX_LINKAGE_NUM; i ++)
+	{
+		outputNum = 0;
+		linkInfoSaveToFlash = 0;
+		if(devNumInfo.linkageIndex[i] != INVALID_SCENE_LINKAGE_INDEX)
+		{
+			printf("the linkage id:%d\r\n",devNumInfo.linkageIndex[i]);
+			js_pl = json_create_object();
+			json_add_item_to_object(js_pl,"2.1.1.3.0",js_oid = json_create_object());
+			json_add_item_to_object(js_oid,"NA",json_create_string(pgw_info->linkage_list[i].linkName));
+			json_add_item_to_object(js_oid,"LD",json_create_number(pgw_info->linkage_list[i].linkageId));
+			json_add_item_to_object(js_oid,"EB",json_create_number(pgw_info->linkage_list[i].Enable));
+			
+			json_add_item_to_object(js_oid,"EXL",js_EXarray =json_create_array());
+			//联动输出缓存有效
+			if(pgw_info->linkage_list[i].outputNum > 0)
+			{ 
+				//遍历输出表
+				for(j = 0; j < MAX_OUTPUT_NUM; j ++)
+				{
+					outputOption = 0;
+					sceneId = INVALID_SCENE_LINKAGE_INDEX;//用于判断当输出为场景时，该场景是否有效
+					if(pgw_info->linkage_list[i].outputInfo[j].valid == 1)
+					{
+						if(pgw_info->linkage_list[i].outputInfo[j].type == SCENE_LIST_ZB_DEV_PAYLOAD)//dev output
+						{
+							printf("read linkage output for zb dev\r\n");
+							js_se = userCreatDevSceneAndLinkageOutputSetingJsonData(pgw_info->linkage_list[i].outputInfo[j]);
+							if(js_se != NULL)
+							{
+								outputOption = 1;
+							}
+						}else if(pgw_info->linkage_list[i].outputInfo[j].type == SCENE_LIST_GW_PAYLOAD){// GW OUTPUT
+							printf("read linkage output for gw\r\n");
+							js_se = userCreatDevSceneAndLinkageOutputSetingJsonData(pgw_info->linkage_list[i].outputInfo[j]);	
+							if(js_se != NULL)
+							{
+								outputOption = 2;
+							}
+						}else if(pgw_info->linkage_list[i].outputInfo[j].type == SCENE_LIST_SCENE_PAYLOAD){//scene payload
+							printf("read linkage output for scene\r\n");
+							if(userCheckSceneIdWasList(pgw_info->linkage_list[i].outputInfo[j].targetId) == 0)
+							{
+								sceneId = pgw_info->linkage_list[i].outputInfo[j].targetId;
+								outputOption = 3;
+							}else{
+								printf("in linkage:the scene id was not in scene list\r\n");
+							}
+						}
+						printf("outputoption:%d\r\n",outputOption);
+						if(outputOption > 0)
+						{
+							
+							js_exe =json_create_object();
+							json_add_item_to_object(js_exe,"CT",json_create_number(pgw_info->linkage_list[i].outputInfo[j].delay));
+							
+							json_add_item_to_object(js_exe,"TY",json_create_number(pgw_info->linkage_list[i].outputInfo[j].type));
+							if(outputOption == 1)
+							{
+								json_add_item_to_object(js_exe,"ZX",json_create_number(pgw_info->linkage_list[i].outputInfo[j].targetId));
+								json_add_item_to_object(js_exe,"SE",js_se);
+							}else if(outputOption == 2){
+								json_add_item_to_object(js_exe,"SE",js_se);
+							}else{
+								json_add_item_to_object(js_exe,"SD",json_create_number(pgw_info->linkage_list[i].outputInfo[j].targetId));
+							}
+							
+							json_add_item_toarray(js_EXarray,js_exe);
+							outputNum ++;
+							
+						}else{
+							//该输出设备的输出条件都不成立(无效)，故删除该输出设备
+							memset((char*)&pgw_info->linkage_list[i].outputInfo[j],0,sizeof(OUTPUTINFO));
+							linkInfoSaveToFlash = 1;
+							if(js_se != NULL)
+							{
+								json_delete(js_se);
+								js_se = NULL;
+							}
+						}
+							
+					}
+				}
+				pgw_info->linkage_list[i].outputNum = outputNum;
+				if(outputNum == 0)
+				{//该联动没有输出设备，被视为无效联动，需要清除该联动信息
+					memset((char*) &pgw_info->linkage_list[i],0,sizeof(LINKAGEINFO));
+					devNumInfo.linkageIndex[i] = INVALID_SCENE_LINKAGE_INDEX;
+					devNumInfo.linkageNum -- ;
+					linkNumSaveToFlash = 1;
+					userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[i],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ i * BASIC_SCENE_INFO_SIZE,sizeof(LINKAGEINFO));
+					if(js_pl != NULL)
+					{
+						json_delete(js_pl);
+						js_pl = NULL;
+					}
+					printf("test 44444444444\r\n");
+					continue;
+				}else{
+					printf("read linkage output success\r\n");
+				}
+			}else{
+					memset((char*) &pgw_info->linkage_list[i],0,sizeof(LINKAGEINFO));
+					devNumInfo.linkageIndex[i] = INVALID_SCENE_LINKAGE_INDEX;
+					devNumInfo.linkageNum -- ;
+					linkNumSaveToFlash =1;
+					userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[i],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ i * BASIC_SCENE_INFO_SIZE,sizeof(LINKAGEINFO));
+					if(js_pl != NULL)
+					{
+						json_delete(js_pl);
+						js_pl = NULL;
+					}
+					printf("test 5555555555555555555\r\n");
+					continue;
+			}
+
+
+			//触发条件读取，如果联动没有触发条件，则删除该联动
+			json_add_item_to_object(js_oid,"COL",js_COarray =json_create_object());
+			inputOption = 0;
+			printf("read input\r\n");
+			if(pgw_info->linkage_list[i].inputInfo.valid == 1)
+			{
+				if(pgw_info->linkage_list[i].inputInfo.type == SCENE_LIST_ZB_DEV_PAYLOAD)
+				{
+					printf("read linkage input for zb dev\r\n");
+					js_ss = userCreatDevLinkageInputStaJsonData(pgw_info->linkage_list[i].inputInfo);
+					if(js_ss != NULL)
+					{
+						inputOption = 1;
+					}
+				}else if(pgw_info->linkage_list[i].inputInfo.type == SCENE_LIST_GW_PAYLOAD){
+					printf("read linkage input for gw\r\n");
+					js_ss = userCreatDevLinkageInputStaJsonData(pgw_info->linkage_list[i].inputInfo);
+					if(js_ss != NULL)
+					{
+						inputOption = 2;
+					}
+				}else if(pgw_info->linkage_list[i].inputInfo.type == SCENE_LIST_TIMER_PAYLOAD){
+					printf("read linkage input for time\r\n");
+					js_tm = json_create_object();
+					js_ts = json_create_array();
+					json_add_item_toarray(js_ts,json_create_number(pgw_info->linkage_list[i].inputInfo.IN.timeIn.month));
+					json_add_item_toarray(js_ts,json_create_number(pgw_info->linkage_list[i].inputInfo.IN.timeIn.day));
+					json_add_item_toarray(js_ts,json_create_number(pgw_info->linkage_list[i].inputInfo.IN.timeIn.hour));
+					json_add_item_toarray(js_ts,json_create_number(pgw_info->linkage_list[i].inputInfo.IN.timeIn.min));
+					json_add_item_to_object(js_tm,"TS",js_ts);
+					json_add_item_to_object(js_tm,"WF",json_create_number(pgw_info->linkage_list[i].inputInfo.IN.timeIn.wkflag));
+					inputOption = 3;
+				}
+
+				if(inputOption > 0)
+				{
+					if(inputOption == 1)
+					{
+						json_add_item_to_object(js_COarray,"SS",js_ss);
+						json_add_item_to_object(js_COarray,"ZX",json_create_number(pgw_info->linkage_list[i].inputInfo.IN.devIn.targetId));
+						
+					}else if(inputOption == 1){
+						json_add_item_to_object(js_COarray,"SS",js_ss);
+					}else{
+						json_add_item_to_object(js_COarray,"TM",js_tm);
+					}
+					json_add_item_to_object(js_COarray,"CD",json_create_number(pgw_info->linkage_list[i].inputInfo.action));
+					json_add_item_to_object(js_COarray,"TY",json_create_number(pgw_info->linkage_list[i].inputInfo.type));
+					printf("read linkage input success\r\n");
+				}else{
+					memset((char*) &pgw_info->linkage_list[i],0,sizeof(LINKAGEINFO));
+					devNumInfo.linkageIndex[i] = INVALID_SCENE_LINKAGE_INDEX;
+					devNumInfo.linkageNum -- ;
+					linkNumSaveToFlash = 1;
+					userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[i],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ i * BASIC_SCENE_INFO_SIZE,sizeof(LINKAGEINFO));
+					if(js_pl != NULL)
+					{
+						json_delete(js_pl);
+						js_pl = NULL;
+					}
+					printf("test 7777777777777777\r\n");
+					continue;
+				}
+				
+			}else{
+				printf("the linkage list input was invalid\r\n");
+				memset((char*) &pgw_info->linkage_list[i],0,sizeof(LINKAGEINFO));
+				devNumInfo.linkageIndex[i] = INVALID_SCENE_LINKAGE_INDEX;
+				devNumInfo.linkageNum -- ;
+				linkNumSaveToFlash = 1;
+				userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[i],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ i * BASIC_SCENE_INFO_SIZE,sizeof(LINKAGEINFO));
+				if(js_pl != NULL)
+				{
+					json_delete(js_pl);
+					js_pl = NULL;
+				}
+				printf("test 8888888888888\r\n");
+				continue;
+			}
+
+			//遍历检测条件缓存，检测条件不是必须条件，联动中可以没有检测条件
+			json_add_item_to_object(js_oid,"CEL",js_CEarray =json_create_array());
+			checkNum = 0;
+			if(pgw_info->linkage_list[i].checkNum > 0)
+			{
+				for(j = 0; j < MAX_CHECK_NUM; j ++)
+				{
+					checkOption = 0;
+					if(pgw_info->linkage_list[i].checkInfo[j].valid == 1)
+					{
+						if(pgw_info->linkage_list[i].checkInfo[j].type == SCENE_LIST_ZB_DEV_PAYLOAD)
+						{
+							printf("read linkage check for zb dev\r\n");
+							js_ss = userCreatDevLinkageCheckStaJsonData(pgw_info->linkage_list[i].checkInfo[j]);
+							if(js_ss != NULL)
+							{
+								checkOption = 1;
+							}
+						}else if(pgw_info->linkage_list[i].checkInfo[j].type == SCENE_LIST_GW_PAYLOAD){
+							printf("read linkage check for gw\r\n");
+							js_ss = userCreatDevLinkageCheckStaJsonData(pgw_info->linkage_list[i].checkInfo[j]);
+							if(js_ss != NULL)
+							{
+								checkOption = 2;
+							}
+						}else if(pgw_info->linkage_list[i].checkInfo[j].type == SCENE_LIST_TIMER_PAYLOAD){
+							printf("read linkage check for time\r\n");
+							js_tm = json_create_object();
+							js_ts = json_create_array();
+							js_te = json_create_array();
+							json_add_item_toarray(js_ts,json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.s_month));
+							json_add_item_toarray(js_ts,json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.s_day));
+							json_add_item_toarray(js_ts,json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.s_hour));
+							json_add_item_toarray(js_ts,json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.s_min));
+
+							json_add_item_toarray(js_te,json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.e_month));
+							json_add_item_toarray(js_te,json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.e_day));
+							json_add_item_toarray(js_te,json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.e_hour));
+							json_add_item_toarray(js_te,json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.e_min));
+							
+							json_add_item_to_object(js_tm,"TS",js_ts);
+							json_add_item_to_object(js_tm,"TE",js_te);
+							json_add_item_to_object(js_tm,"WF",json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.timeCheck.wk_flag));
+							if(js_tm != NULL)
+							{
+								checkOption = 3;
+							}
+						}else if(pgw_info->linkage_list[i].checkInfo[j].type == SCENE_LIST_EVIROMENT_LIGHT_PAYLOAD){
+							printf("read linkage check for enviroment light\r\n");
+							checkOption = 4;
+						}
+
+						if(checkOption != 0)
+						{
+							js_ck = json_create_object();
+							json_add_item_to_object(js_ck,"TY",json_create_number(pgw_info->linkage_list[i].checkInfo[j].type));
+							json_add_item_to_object(js_ck,"CD",json_create_number(pgw_info->linkage_list[i].checkInfo[j].action));
+							if(checkOption == 1)
+							{
+								json_add_item_to_object(js_ck,"ZX",json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.devCheck.targetId));
+								json_add_item_to_object(js_ck,"SS",js_ss);
+							}else if(checkOption == 2){
+								json_add_item_to_object(js_ck,"SS",js_ss);
+							}else if(checkOption == 3){
+								json_add_item_to_object(js_ck,"TM",js_tm);
+							}else if(checkOption == 4){
+								json_add_item_to_object(js_ck,"EL",json_create_number(pgw_info->linkage_list[i].checkInfo[j].check.eviromentLight));
+							}
+							
+							json_add_item_toarray(js_CEarray,js_ck);
+							checkNum ++;
+						}else{
+							memset((char*)&pgw_info->linkage_list[i].checkInfo[j],0,sizeof(CHCEKINFO));
+							linkInfoSaveToFlash = 1;
+						}
+					}
+				}
+				pgw_info->linkage_list[i].checkNum = checkNum;
+				if(checkNum != 0)
+				{
+					printf("read linkage check success\r\n");
+				}
+			}
+			printf("test for cek 111111111111\r\n");
+			userCreateJsplToBuf(js_pl,APP_CMD_RC_SUCCESS,MESSAGE_RSP_GETINFO,NULL,NULL,sn,SEND_TO_APP_DATA_NEED_ENCODE,rcvType,appDevId);
+			linkNum ++;
+			printf("test for cek 22222222\r\n");
+			if(js_pl != NULL)
+			{
+				json_delete(js_pl);
+				js_pl = NULL;
+			}
+			if(linkInfoSaveToFlash == 1)
+			{
+				linkInfoSaveToFlash = 0;
+				userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[i],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ i * BASIC_SCENE_INFO_SIZE,sizeof(LINKAGEINFO));
+			}
+			
+		}
+	}
+	if(linkNumSaveToFlash == 1)
+	{
+		userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+	}
+	printf("test for cek 3333333\r\n");
+	if(linkNum == 0)
+	{
+		js_pl = json_create_object();
+		userCreateJsplToBuf(js_pl,APP_CMD_RC_SUCCESS,MESSAGE_RSP_GETINFO,NULL,NULL,sn,SEND_TO_APP_DATA_NEED_ENCODE,rcvType,appDevId);
+		if(js_pl != NULL)
+		{
+			json_delete(js_pl);
+			js_pl = NULL;
+		}
+	}
+	printf("test for cek 444444444444\r\n");
+}
+
+
+
+
+/********************************************************************
+删除联动函数
+**********************************************************************/
+int userDeleteLinkageFromId(uint8_t linkageId)
+{
+	int ret = 0;
+	HM_GW_LIST *pgw_info=&gw_info;
+	uint8_t tmIndex = linkageId % 10;
+	if((devNumInfo.linkageIndex[tmIndex] == linkageId))
+	{
+		devNumInfo.linkageIndex[tmIndex] = INVALID_SCENE_LINKAGE_INDEX;
+		devNumInfo.linkageNum --;
+		memset((char*)&pgw_info->linkage_list[tmIndex],0,sizeof(LINKAGEINFO));
+		userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+		userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[tmIndex],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ tmIndex * BASIC_SCENE_INFO_SIZE,sizeof(LINKAGEINFO));
+	}else{
+		ret = -1;
+	}
+	return ret;
+}
+/**********************************************************************
+设置联动的有效性
+**********************************************************************/
+int userSetEnableLinkageFunc(uint8_t linkageId,uint8_t state)
+{
+	int ret = 0;
+	HM_GW_LIST *pgw_info=&gw_info;
+	uint8_t tmIndex = linkageId % 10;
+	if((devNumInfo.linkageIndex[tmIndex] == linkageId))
+	{
+		if(pgw_info->linkage_list[tmIndex].valid == 1)
+		{
+			if(state != pgw_info->linkage_list[tmIndex].Enable)
+			{
+				pgw_info->linkage_list[tmIndex].Enable = state;
+				userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[tmIndex],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ tmIndex * BASIC_SCENE_INFO_SIZE,sizeof(LINKAGEINFO));
+			}
+		}else{
+			printf("the linkage id list was not existent\r\n");
+			ret = -1;
+			devNumInfo.linkageNum --;
+			devNumInfo.linkageIndex[tmIndex] = INVALID_SCENE_LINKAGE_INDEX;
+			userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+		}
+	}else{
+		printf("the linkage id was not valid\r\n");
+		ret = -1;
+	}
+	return ret;
+}
+
+/**************************************************
+创建联动输出设备列表
+****************************************************/
+int userCreatLinkageDevActionData(json_t *js_outInfo,OUTPUTINFO *outPut)
+{
+	int ret = 0;
+	json_t *js_child,*js_temp,*js_value,*js_se = NULL;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t oidCount,i;
+	uint8_t outputNum = 0;
+	
+	if((js_outInfo == NULL) || (outPut == NULL))
+	{
+		printf("linkage out dev action se was null\r\n");
+		return -1;
+	}
+
+
+	js_temp = json_get_object_item(js_outInfo,"TY");
+	
+	if(js_temp != NULL)
+	{
+		outPut->type = js_temp->valueint;
+	}else{
+		printf("the json not have type\r\n");
+		return -1;
+	}
+
+
+	js_temp = json_get_object_item(js_outInfo,"CT");
+	
+	if(js_temp != NULL)
+	{
+		outPut->delay = js_temp->valueint;
+	}
+	
+	
+	if(outPut->type == SCENE_LIST_GW_PAYLOAD)
+	{
+		js_temp = json_get_object_item(js_outInfo,"SE");
+		
+		if(js_temp != NULL)
+		{
+			js_se = js_temp->child;
+			printf("linkage output test: 55555:%s\r\n",js_se->string);
+			while(js_se != NULL)
+			{
+				if(strcmp(js_se->string,"LO") == 0)
+				{
+					printf("test for lo\r\n");
+					outPut->devData.gwOutput.lightOnoff = js_se->valueint;
+					outPut->devAction.GWStat.gwlightonoff = 1;
+					outputNum ++;
+				}else if(strcmp(js_se->string,"AT") == 0){
+					printf("test for at\r\n");
+					outPut->devData.gwOutput.armType = js_se->valueint;
+					outPut->devAction.GWStat.armtype = 1;
+					outputNum ++;
+				}
+				js_se = js_se->next;
+			}
+		}else{
+			printf("in linkage creat gw output:the json not have se\r\n");
+			return -1;
+		}
+	}else if(outPut->type == SCENE_LIST_ZB_DEV_PAYLOAD){
+
+		js_temp = json_get_object_item(js_outInfo,"ZX");
+		
+		if(js_temp != NULL)
+		{
+			outPut->targetId = js_temp->valueint;
+		}else{
+			printf("the index json was null\r\n");
+			return -1;
+		}
+
+		js_temp = json_get_object_item(js_outInfo,"SE");
+		
+		if(js_temp == NULL)
+		{
+			printf("in linkage creat dev output:the json not have se\r\n");
+			return -1;
+		}
+		pni_temp = findInDevListByIndex(outPut->targetId);
+		if(pni_temp == NULL)
+		{
+			printf("in linkage out create: the index dev was not fond in dev list\r\n");
+			return -1;
+		}
+		js_se = js_temp->child;
+		switch(pni_temp->devType)
+		{
+			case NODE_INFO_TYPE_LIGHT_RGB:
+				printf("linkage output for RGB\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"OF") == 0)
+					{
+						outPut->devData.rgbOutput.onoff = js_se->valueint;
+						outPut->devAction.RGBSet.onoff = 1;
+						outputNum ++;
+					}else if(strcmp(js_se->string,"LE") == 0){
+						outPut->devData.rgbOutput.level = js_se->valueint;
+						outPut->devAction.RGBSet.level = 1;
+						outputNum ++;
+					}else if(strcmp(js_se->string,"CR") == 0){
+						outPut->devData.rgbOutput.rgb_r = js_se->valueint;
+						outPut->devAction.RGBSet.colour_r= 1;
+						outputNum ++;
+					}else if(strcmp(js_se->string,"CG") == 0){
+						outPut->devData.rgbOutput.rgb_g = js_se->valueint;
+						outPut->devAction.RGBSet.colour_g = 1;
+						outputNum ++;
+					}else if(strcmp(js_se->string,"CB") == 0){
+						outPut->devData.rgbOutput.rgb_b = js_se->valueint;
+						outPut->devAction.RGBSet.colour_b = 1;
+						outputNum ++;
+					}
+					js_se = js_se->next;
+				}
+				break;
+			case NODE_INFO_TYPE_AI1SW:
+			case NODE_INFO_TYPE_AI2SW:
+			case NODE_INFO_TYPE_AI3SW:
+				printf("linkage output for switch\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"OF1") == 0)
+					{
+						outPut->devData.switchOutput.onoff1 = js_se->valueint;
+						outPut->devAction.SWSet.onoff1 = 1;
+						outputNum ++;
+					}else if(strcmp(js_se->string,"OF2") == 0){
+						outPut->devData.switchOutput.onoff2 = js_se->valueint;
+						outPut->devAction.SWSet.onoff2 = 1;
+						outputNum ++;
+					}else if(strcmp(js_se->string,"OF3") == 0){
+						outPut->devData.switchOutput.onoff3 = js_se->valueint;
+						outPut->devAction.SWSet.onoff3 = 1;
+						outputNum ++;
+					}
+					js_se = js_se->next;
+				}
+				break;
+			case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+				printf("linkage output for cut rgb\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"OFL") == 0)
+					{
+						do{
+							oidCount = json_get_array_size(js_se);
+							if(oidCount == 4)
+							{
+								for(i = 0; i < oidCount; i ++)
+								{
+									js_value = json_get_array_item(js_se,i);
+									if(js_value !=  NULL)
+									{
+										if(i == 0)
+										{
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.onoff1 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.onoffList1 = 1;
+												outputNum ++;
+											}
+										}else if(i == 1){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.onoff2 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.onoffList2 = 1;
+												outputNum ++;
+											}
+										}else if(i == 2){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.onoff3 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.onoffList3 = 1;
+												outputNum ++;
+											}
+										}else if(i == 3){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.onoff4 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.onoffList4 = 1;
+												outputNum ++;
+											}
+										}
+									}else{
+										printf("the ofl array start was error\r\n");
+										ret = -1;
+									}
+								}
+							}else{
+								printf("the js count was error\r\n ");
+								ret = -1;
+							}
+						}while(0);
+						if(ret == -1)
+						{
+							break;
+						}
+					}else if(strcmp(js_se->string,"LEL") == 0){
+						do{
+							oidCount = json_get_array_size(js_se);
+							if(oidCount == 4)
+							{
+								for(i = 0; i < oidCount; i ++)
+								{
+									js_value = json_get_array_item(js_se,i);
+									if(js_value !=  NULL)
+									{
+										if(i == 0)
+										{
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.brightness1 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.brightnessList1 = 1;
+												outputNum ++;
+											}
+										}else if(i == 1){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.brightness2 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.brightnessList2 = 1;
+												outputNum ++;
+											}
+										}else if(i == 2){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.brightness3 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.brightnessList3 = 1;
+												outputNum ++;
+											}
+										}else if(i == 3){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.brightness4 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.brightnessList4 = 1;
+												outputNum ++;
+											}
+										}
+									}else{
+										printf("the time start was error\r\n");
+										ret = -1;
+									}
+								}
+							}else{
+								printf("the js count was error\r\n ");
+								ret = -1;
+							}
+						}while(0);
+						if(ret == -1)
+						{
+							break;
+						}
+					}else if(strcmp(js_se->string,"CWL") == 0){
+						do{
+							oidCount = json_get_array_size(js_se);
+							if(oidCount == 4)
+							{
+								for(i = 0; i < oidCount; i ++)
+								{
+									js_value = json_get_array_item(js_se,i);
+									if(js_value !=  NULL)
+									{
+										if(i == 0)
+										{
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.colorTemp1 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.colorTempList1 = 1;
+												outputNum ++;
+											}
+										}else if(i == 1){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.colorTemp2 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.colorTempList2 = 1;
+												outputNum ++;
+											}
+										}else if(i == 2){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.colorTemp3 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.colorTempList3 = 1;
+												outputNum ++;
+											}
+										}else if(i == 3){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.colorTemp4 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.colorTempList4 = 1;
+												outputNum ++;
+											}
+										}
+									}else{
+										printf("the time start was error\r\n");
+										ret = -1;
+									}
+								}
+							}else{
+								printf("the js count was error\r\n ");
+								ret = -1;
+							}
+						}while(0);
+						if(ret == -1)
+						{
+							break;
+						}
+					}
+					
+					js_se = js_se->next;
+				}
+				outPut->delay = 0;
+				break;
+			case NODE_INFO_TYPE_RELAY_CONTROL:
+				printf("scene output for relay\r\n");
+				break;
+			case NODE_INFO_TYPE_AI_SOCKET_USB:
+				printf("linkage output for usb plug\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"RO") == 0)
+					{
+						outPut->devData.uplugOutput.onoff_r = js_se->valueint;
+						outPut->devAction.UPlugSet.relayOnoff = 1;
+						outputNum ++;
+					}else if(strcmp(js_se->string,"UO") == 0){
+						outPut->devData.uplugOutput.onoff_u = js_se->valueint;
+						outPut->devAction.UPlugSet.usbOnoff = 1;
+						outputNum ++;
+					}
+					js_se = js_se->next;
+				}	
+				break;
+			case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+				printf("linkage output for smart plug\r\n");
+				while(js_se != NULL)
+				{
+					printf("test for splug 11111111\r\n");
+					if(strcmp(js_se->string,"RO") == 0)
+					{
+						printf("test for ro\r\n");
+						outPut->devData.splugOutput.onoff = js_se->valueint;
+						outPut->devAction.SPlugSet.relayOnoff = 1;
+						outputNum ++;
+					}
+					js_se = js_se->next;
+				}
+				printf("test for splug 2222222\r\n");
+				break;
+			case NODE_INFO_TYPE_WARNING_DEV:
+				printf("linkage output for warming dev\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"OF") == 0)
+					{
+						printf("test for OF\r\n");
+						outPut->devData.wdOutput.onoff = js_se->valueint;
+						outPut->devAction.WDSet.onoff = 1;
+						outputNum ++; 
+					}
+					js_se = js_se->next;
+				}
+				break;
+			default:
+				ret = -1;
+				break;
+		}
+	}else if(outPut->type == SCENE_LIST_SCENE_PAYLOAD){
+		printf("creat linkage output for scene id\r\n");
+		js_temp = json_get_object_item(js_outInfo,"SD");
+		if(js_temp != NULL)
+		{
+			outPut->targetId = js_temp->valueint;
+			outputNum ++;
+		}else{
+			printf("the json not have scene id\r\n");
+			return -1;
+		}
+	}else{
+		ret = -1;
+	}
+	if(ret == 0)
+	{
+		if(outputNum > 0)
+		{
+			outPut->valid = 1;
+		}else{
+			ret = -1;
+		}
+	}
+	return ret;
+}
+/**********************************************************************
+创建联动检测条件
+**********************************************************************/
+int userCreatLinkageCheckBuf(json_t *checkPl,CHCEKINFO *checkBuf)
+{
+	int ret = 0;
+	HM_DEV_RAM_LIST *pni_temp;
+	json_t *js_temp,*js_ss,*js_value;
+	uint8_t termNum = 0;
+	char tempString[10];
+	float tempF;
+	int16_t vFlag;
+	uint8_t setTimeFlag = 0;
+	uint8_t oidCount,i;
+	do{
+		if((checkPl == NULL) || (checkBuf == NULL))
+		{
+			printf("the check json data was null\r\n");
+			ret -1;
+			break;
+		}
+		checkBuf->check.devCheck.devAction.modeByte = 0;//初始化dev 状态标识位
+		js_temp = json_get_object_item(checkPl,"TY");
+		if(js_temp != NULL)
+		{
+			checkBuf->type = js_temp->valueint;
+		}else{
+			printf("the linkage input json not have type\r\n");
+			ret -1;
+			break;
+		}
+
+		js_temp = json_get_object_item(checkPl,"CD");//action 
+		if(js_temp != NULL)
+		{
+			printf("the input dev action:%d\r\n",js_temp->valueint);
+			checkBuf->action = js_temp->valueint;
+		}
+
+		if(checkBuf->type == SCENE_LIST_GW_PAYLOAD)//gw input
+		{
+			js_temp = json_get_object_item(checkPl,"SS");
+			if(js_temp != NULL)
+			{
+				js_ss = js_temp->child;
+				printf("linkage check for gw\r\n");
+				while(js_ss != NULL)
+				{
+					if(strcmp(js_ss->string,"LO") == 0)
+					{
+						checkBuf->check.devCheck.devData.gwStaInput.lightOnoff = js_ss->valueint;
+						checkBuf->check.devCheck.devAction.GWStat.gwlightonoff = 1;
+						termNum ++;
+					}else if(strcmp(js_ss->string,"AT") == 0)
+					{
+						checkBuf->check.devCheck.devData.gwStaInput.armType = js_ss->valueint;
+						checkBuf->check.devCheck.devAction.GWStat.armtype = 1;
+						termNum ++;
+					}
+					js_ss = js_ss->next;
+				}
+			}
+		}else if(checkBuf->type == SCENE_LIST_ZB_DEV_PAYLOAD){//zb dev input
+		
+			js_temp = json_get_object_item(checkPl,"ZX");
+			if(js_temp != NULL)
+			{
+				checkBuf->check.devCheck.targetId = js_temp->valueint;
+				pni_temp = findInDevListByIndex(checkBuf->check.devCheck.targetId);
+				if(pni_temp == NULL)
+				{
+					printf("in linkage check:the dev was not in dev list\r\n");
+					ret = -1;
+					break;
+				}
+			}else{
+				printf("the linkage check json not have dev index\r\n");
+				ret -1;
+				break;
+			}
+
+			js_temp = json_get_object_item(checkPl,"SS");
+			if(js_temp != NULL)
+			{
+				js_ss = js_temp->child;
+				if(js_ss == NULL)
+				{
+					printf("in linkage creat,the check dev was not valid\r\n");
+					ret = -1;
+					break;
+				}
+
+				switch(pni_temp->devType)
+				{
+					case NODE_INFO_TYPE_LIGHT_RGB:
+						printf("linkage check for RGB\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"OF") == 0)
+							{
+								checkBuf->check.devCheck.devData.rgbStaInput.onoff = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.RGBState.onoff = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_AI1SW:
+					case NODE_INFO_TYPE_AI2SW:
+					case NODE_INFO_TYPE_AI3SW:
+						printf("linkage check for switch\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"OF1") == 0)
+							{
+								checkBuf->check.devCheck.devData.swStaInput.onoff1 = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.SWState.onoff1 = 1;
+								termNum ++;
+							}else if(strcmp(js_ss->string,"OF2") == 0)
+							{
+								checkBuf->check.devCheck.devData.swStaInput.onoff2 = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.SWState.onoff2 = 1;
+								termNum++;
+							}else if(strcmp(js_ss->string,"OF3") == 0)
+							{
+								checkBuf->check.devCheck.devData.swStaInput.onoff3 = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.SWState.onoff3 = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+						printf("linkage check for cut rgb\r\n");
+						if(strcmp(js_ss->string,"OFL") == 0)
+						{
+							do{
+								oidCount = json_get_array_size(js_ss);
+								if(oidCount == 4)
+								{
+									for(i = 0; i < oidCount; i ++)
+									{
+										js_value = json_get_array_item(js_ss,i);
+										if(js_value !=  NULL)
+										{
+											if(i == 0)
+											{
+												if(js_value->valueint != -1)
+												{
+													checkBuf->check.devCheck.devData.cutRgbInput.onoff1 = js_value->valueint;
+													checkBuf->check.devCheck.devAction.CUTRGBState.onoffList1 = 1;
+													termNum ++;
+												}
+											}else if(i == 1){
+												if(js_value->valueint != -1)
+												{
+													checkBuf->check.devCheck.devData.cutRgbInput.onoff2 = js_value->valueint;
+													checkBuf->check.devCheck.devAction.CUTRGBState.onoffList2 = 1;
+													termNum ++;
+												}
+											}else if(i == 2){
+												if(js_value->valueint != -1)
+												{
+													checkBuf->check.devCheck.devData.cutRgbInput.onoff3 = js_value->valueint;
+													checkBuf->check.devCheck.devAction.CUTRGBState.onoffList3 = 1;
+													termNum ++;
+												}
+											}else if(i == 3){
+												if(js_value->valueint != -1)
+												{
+													checkBuf->check.devCheck.devData.cutRgbInput.onoff4 = js_value->valueint;
+													checkBuf->check.devCheck.devAction.CUTRGBState.onoffList4 = 1;
+													termNum ++;
+												}
+											}
+										}else{
+											printf("the ofl array start was error\r\n");
+											ret = -1;
+										}
+									}
+								}else{
+									printf("the js count was error\r\n ");
+									ret = -1;
+								}
+							}while(0);
+							if(ret == -1)
+							{
+								break;
+							}
+						}
+						break;
+					case NODE_INFO_TYPE_RELAY_CONTROL:
+						printf("linkage check for relay\r\n");
+						break;
+					case NODE_INFO_TYPE_AI_SOCKET_USB:
+						printf("linkage check for usb plug\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"RO") == 0)
+							{
+								checkBuf->check.devCheck.devData.uplugStaInput.onoff_r = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.UPlugState.relayOnoff = 1;
+								termNum ++;
+							}else if(strcmp(js_ss->string,"UO") == 0)
+							{
+								checkBuf->check.devCheck.devData.uplugStaInput.onoff_u = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.UPlugState.usbOnoff = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}	
+						break;
+					case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+						printf("linkage input for smart plug\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"RO") == 0)
+							{
+								printf("linkage test for ro\r\n");
+								checkBuf->check.devCheck.devData.splugStaInput.onoff = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.SPlugState.relayOnoff = 1;
+								termNum ++;
+							}else if(strcmp(js_ss->string,"PW") == 0)
+							{
+								printf("linkage test for pw\r\n");
+								checkBuf->check.devCheck.devData.splugStaInput.power_kw = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.SPlugState.power_w = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_MAGNET_DOOR:
+					case NODE_INFO_TYPE_WATER_SENSOR:
+					case NODE_INFO_TYPE_PIR_SENSOR:
+					case NODE_INFO_TYPE_SMOKE_SENSOR:
+					case NODE_INFO_TYPE_GAS_SENSOR:
+					case NODE_INFO_TYPE_CO_SENSOR:
+					case NODE_INFO_TYPE_SOS:
+					case NODE_INFO_TYPE_VIBRATION:
+						printf("linkage check for ias dev\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"OF") == 0)
+							{
+								printf("linkage test for ro\r\n");
+								checkBuf->check.devCheck.devData.iasStaInput.onoff = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.IASState.onoff = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_REMOTE_CONTROL:
+						printf("linkage check for ace dev\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"OF") == 0)
+							{
+								checkBuf->check.devCheck.devData.aceStaInput.onoff = js_ss->valueint;
+								checkBuf->check.devCheck.devAction.ACEState.onoff = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_TEMP_HUM_SENSOR:
+						printf("linkage check for THP dev\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"TP") == 0)
+							{
+								
+								memcpy(tempString,js_ss->valuestring,strlen(js_ss->valuestring));
+								if(tempString[0] == '-')
+								{
+									vFlag = -1;	
+									tempF = Atof(&tempString[1]);
+								}else {
+									vFlag = 1;
+									tempF = Atof(&tempString[0]);
+								}
+								
+								checkBuf->check.devCheck.devData.thpStaInput.tempValue = (int16_t)(vFlag * tempF * 100);
+								printf("linkage test for tp:%d\r\n",checkBuf->check.devCheck.devData.thpStaInput.tempValue);
+								
+								checkBuf->check.devCheck.devAction.THPState.temp = 1;
+								termNum ++;
+							}else if(strcmp(js_ss->string,"HY") == 0)
+							{
+								memcpy(tempString,js_ss->valuestring,strlen(js_ss->valuestring));
+								tempF = Atof(&tempString[0]);
+								checkBuf->check.devCheck.devData.thpStaInput.humiValue = (uint16_t)(tempF * 100);
+								printf("linkage test for hy:%d\r\n",checkBuf->check.devCheck.devData.thpStaInput.humiValue);
+								
+								checkBuf->check.devCheck.devAction.THPState.humi = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+					default:
+						ret = -1;
+						break;
+				}
+			}else{
+				printf("the linkage check json not have dev state\r\n");
+				ret -1;
+				break;
+			}
+		}else if(checkBuf->type == SCENE_LIST_TIMER_PAYLOAD){//time input
+			printf("linkage check for time\r\n");
+			js_temp = json_get_object_item(checkPl,"TM");
+			if(js_temp != NULL)
+			{
+				js_ss = js_temp->child;
+				while(js_ss != NULL)
+				{
+					if(strcmp(js_ss->string,"TS") == 0){
+						do{
+							if(js_ss != NULL)
+							{
+								
+								oidCount = json_get_array_size(js_ss);
+								if(oidCount == 4)
+								{
+									for(i = 0; i < oidCount; i ++)
+									{
+										js_value = json_get_array_item(js_ss,i);
+										if(js_value !=  NULL)
+										{
+											if(i == 0)
+											{
+												checkBuf->check.timeCheck.s_month = js_value->valueint;
+											}else if(i == 1){
+												checkBuf->check.timeCheck.s_day = js_value->valueint;
+											}else if(i == 2){
+												checkBuf->check.timeCheck.s_hour = js_value->valueint;
+											}else if(i == 3){
+												checkBuf->check.timeCheck.s_min = js_value->valueint;
+											}
+										}else{
+											printf("the time start was error\r\n");
+											ret = -1;
+										}
+									}
+								}else{
+									printf("the js count was error\r\n ");
+									ret = -1;
+								}
+							}else{
+								printf("the js for time was null\r\n");
+								ret = -1;
+							}
+						}while(0);
+					}else if(strcmp(js_ss->string,"TE") == 0){
+						do{
+							if(js_ss != NULL)
+							{
+								
+								oidCount = json_get_array_size(js_ss);
+								if(oidCount == 4)
+								{
+									for(i = 0; i < oidCount; i ++)
+									{
+										js_value = json_get_array_item(js_ss,i);
+										if(js_value !=  NULL)
+										{
+											if(i == 0)
+											{
+												checkBuf->check.timeCheck.e_month = js_value->valueint;
+											}else if(i == 1){
+												checkBuf->check.timeCheck.e_day = js_value->valueint;
+											}else if(i == 2){
+												checkBuf->check.timeCheck.e_hour = js_value->valueint;
+											}else if(i == 3){
+												checkBuf->check.timeCheck.e_min = js_value->valueint;
+											}
+										}else{
+											printf("the time start was error\r\n");
+											ret = -1;
+										}
+									}
+								}else{
+									printf("the js count was error\r\n ");
+									ret = -1;
+								}
+							}else{
+								printf("the js for time was null\r\n");
+								ret = -1;
+							}
+						}while(0);
+					}else if(strcmp(js_ss->string,"WF") == 0)
+					{
+						checkBuf->check.timeCheck.wk_flag = js_ss->valueint;
+					}
+					js_ss = js_ss->next;
+				}
+				if(ret == 0)
+				{
+					printf("set time was check term success\r\n");
+					termNum = 1;
+				}else{
+					printf("set time was check term faild\r\n");
+					ret = -1;
+				}
+			}
+		}else if(checkBuf->type == SCENE_LIST_EVIROMENT_LIGHT_PAYLOAD){
+			js_temp = json_get_object_item(checkPl,"EL");//enviroment light 
+			if(js_temp != NULL)
+			{
+				printf("the check enviroment light:%d\r\n",js_temp->valueint);
+				checkBuf->check.eviromentLight = js_temp->valueint;
+				termNum ++;
+			}else{
+				printf("creat the check enviroment light was faild\r\n");
+			}
+		}else{
+			printf("in linkage input type was not valid\r\n");
+			ret -1;
+			break;
+		}
+	}while(0);
+	if(ret == 0)
+	{
+		if(termNum == 0)
+		{
+			printf("linkage check term num was not valid\r\n");
+			ret = -1;
+		}else{
+			printf("linkage check term success\r\n");
+			checkBuf->valid = 1;
+		}
+	}
+	return ret;
+
+}
+
+
+/**********************************************************************
+创建联动触发条件
+**********************************************************************/
+
+int userCreatLinkageInputData(json_t *inputPl,INPUTINFO *inputBuf)
+{
+	int ret = 0;
+	HM_DEV_RAM_LIST *pni_temp;
+	json_t *js_temp,*js_ss,*js_value;
+	uint8_t termNum = 0;
+	char tempString[10];
+	float tempF;
+	int16_t vFlag;
+	uint8_t setTimeFlag = 0;
+	uint8_t oidCount,i;
+
+	do{
+		if((inputPl == NULL) || (inputBuf == NULL))
+		{
+			printf("the input json data was null\r\n");
+			ret -1;
+			break;
+		}
+		inputBuf->IN.devIn.devAction.modeByte = 0;//初始化dev 状态标识位
+		js_temp = json_get_object_item(inputPl,"TY");
+		if(js_temp != NULL)
+		{
+			inputBuf->type = js_temp->valueint;
+		}else{
+			printf("the linkage input json not have type\r\n");
+			ret -1;
+			break;
+		}
+
+		js_temp = json_get_object_item(inputPl,"CD");//action 
+		if(js_temp != NULL)
+		{
+			printf("the input dev action:%d\r\n",js_temp->valueint);
+			inputBuf->action = js_temp->valueint;
+		}
+
+		if(inputBuf->type == SCENE_LIST_GW_PAYLOAD)//gw input
+		{
+			js_temp = json_get_object_item(inputPl,"SS");
+			if(js_temp != NULL)
+			{
+				js_ss = js_temp->child;
+				printf("linkage input for gw\r\n");
+				while(js_ss != NULL)
+				{
+					if(strcmp(js_ss->string,"LO") == 0)
+					{
+						inputBuf->IN.devIn.devData.gwStaInput.lightOnoff = js_ss->valueint;
+						inputBuf->IN.devIn.devAction.GWStat.gwlightonoff = 1;
+						termNum ++;
+					}else if(strcmp(js_ss->string,"AT") == 0)
+					{
+						inputBuf->IN.devIn.devData.gwStaInput.armType = js_ss->valueint;
+						inputBuf->IN.devIn.devAction.GWStat.armtype = 1;
+						termNum ++;
+					}
+					js_ss = js_ss->next;
+				}
+			}
+		}else if(inputBuf->type == SCENE_LIST_ZB_DEV_PAYLOAD){//zb dev input
+		
+			js_temp = json_get_object_item(inputPl,"ZX");
+			if(js_temp != NULL)
+			{
+				inputBuf->IN.devIn.targetId = js_temp->valueint;
+				pni_temp = findInDevListByIndex(inputBuf->IN.devIn.targetId);
+				if(pni_temp == NULL)
+				{
+					printf("in linkage input:the dev was not in dev list\r\n");
+					ret = -1;
+					break;
+				}
+			}else{
+				printf("the linkage input json not have dev index\r\n");
+				ret -1;
+				break;
+			}
+
+			js_temp = json_get_object_item(inputPl,"SS");
+			if(js_temp != NULL)
+			{
+				js_ss = js_temp->child;
+				if(js_ss == NULL)
+				{
+					printf("in linkage creat,the input dev was not valid\r\n");
+					ret = -1;
+					break;
+				}
+
+				switch(pni_temp->devType)
+				{
+					case NODE_INFO_TYPE_LIGHT_RGB:
+						printf("linkage input for RGB\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"OF") == 0)
+							{
+								inputBuf->IN.devIn.devData.rgbStaInput.onoff = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.RGBState.onoff = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_AI1SW:
+					case NODE_INFO_TYPE_AI2SW:
+					case NODE_INFO_TYPE_AI3SW:
+						printf("linkage input for switch\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"OF1") == 0)
+							{
+								inputBuf->IN.devIn.devData.swStaInput.onoff1 = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.SWState.onoff1 = 1;
+								termNum ++;
+							}else if(strcmp(js_ss->string,"OF2") == 0)
+							{
+								inputBuf->IN.devIn.devData.swStaInput.onoff2 = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.SWState.onoff2 = 1;
+								termNum++;
+							}else if(strcmp(js_ss->string,"OF3") == 0)
+							{
+								inputBuf->IN.devIn.devData.swStaInput.onoff3 = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.SWState.onoff3 = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+						printf("linkage input for cut rgb\r\n");
+						if(strcmp(js_ss->string,"OFL") == 0)
+						{
+							do{
+								oidCount = json_get_array_size(js_ss);
+								if(oidCount == 4)
+								{
+									for(i = 0; i < oidCount; i ++)
+									{
+										js_value = json_get_array_item(js_ss,i);
+										if(js_value !=  NULL)
+										{
+											if(i == 0)
+											{
+												if(js_value->valueint != -1)
+												{
+													inputBuf->IN.devIn.devData.cutRgbInput.onoff1 = js_value->valueint;
+													inputBuf->IN.devIn.devAction.CUTRGBState.onoffList1 = 1;
+													termNum ++;
+												}
+											}else if(i == 1){
+												if(js_value->valueint != -1)
+												{
+													inputBuf->IN.devIn.devData.cutRgbInput.onoff2 = js_value->valueint;
+													inputBuf->IN.devIn.devAction.CUTRGBState.onoffList2 = 1;
+													termNum ++;
+												}
+											}else if(i == 2){
+												if(js_value->valueint != -1)
+												{
+													inputBuf->IN.devIn.devData.cutRgbInput.onoff3 = js_value->valueint;
+													inputBuf->IN.devIn.devAction.CUTRGBState.onoffList3 = 1;
+													termNum ++;
+												}
+											}else if(i == 3){
+												if(js_value->valueint != -1)
+												{
+													inputBuf->IN.devIn.devData.cutRgbInput.onoff4 = js_value->valueint;
+													inputBuf->IN.devIn.devAction.CUTRGBState.onoffList4 = 1;
+													termNum ++;
+												}
+											}
+										}else{
+											printf("the ofl array start was error\r\n");
+											ret = -1;
+										}
+									}
+								}else{
+									printf("the js count was error\r\n ");
+									ret = -1;
+								}
+							}while(0);
+							if(ret == -1)
+							{
+								break;
+							}
+						}
+						break;
+					case NODE_INFO_TYPE_RELAY_CONTROL:
+						printf("linkage input for relay\r\n");
+						break;
+					case NODE_INFO_TYPE_AI_SOCKET_USB:
+						printf("linkage input for usb plug\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"RO") == 0)
+							{
+								inputBuf->IN.devIn.devData.uplugStaInput.onoff_r = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.UPlugState.relayOnoff = 1;
+								termNum ++;
+							}else if(strcmp(js_ss->string,"UO") == 0)
+							{
+								inputBuf->IN.devIn.devData.uplugStaInput.onoff_u = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.UPlugState.usbOnoff = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}	
+						break;
+					case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+						printf("linkage input for smart plug\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"RO") == 0)
+							{
+								printf("linkage test for ro\r\n");
+								inputBuf->IN.devIn.devData.splugStaInput.onoff = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.SPlugState.relayOnoff = 1;
+								termNum ++;
+							}else if(strcmp(js_ss->string,"PW") == 0)
+							{
+								printf("linkage test for pw\r\n");
+								inputBuf->IN.devIn.devData.splugStaInput.power_kw = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.SPlugState.power_w = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_MAGNET_DOOR:
+					case NODE_INFO_TYPE_WATER_SENSOR:
+					case NODE_INFO_TYPE_PIR_SENSOR:
+					case NODE_INFO_TYPE_SMOKE_SENSOR:
+					case NODE_INFO_TYPE_GAS_SENSOR:
+					case NODE_INFO_TYPE_CO_SENSOR:
+					case NODE_INFO_TYPE_SOS:
+					case NODE_INFO_TYPE_VIBRATION:
+						printf("linkage input for ias dev\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"OF") == 0)
+							{
+								printf("linkage test for ro\r\n");
+								inputBuf->IN.devIn.devData.iasStaInput.onoff = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.IASState.onoff = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_REMOTE_CONTROL:
+						printf("linkage input for ace dev\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"OF") == 0)
+							{
+								inputBuf->IN.devIn.devData.aceStaInput.onoff = js_ss->valueint;
+								inputBuf->IN.devIn.devAction.ACEState.onoff = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					case NODE_INFO_TYPE_TEMP_HUM_SENSOR:
+						printf("linkage input for THP dev\r\n");
+						while(js_ss != NULL)
+						{
+							if(strcmp(js_ss->string,"TP") == 0)
+							{
+								
+								memcpy(tempString,js_ss->valuestring,strlen(js_ss->valuestring));
+								if(tempString[0] == '-')
+								{
+									vFlag = -1;	
+									tempF = Atof(&tempString[1]);
+								}else {
+									vFlag = 1;
+									tempF = Atof(&tempString[0]);
+								}
+								
+								inputBuf->IN.devIn.devData.thpStaInput.tempValue = (int16_t)(vFlag * tempF * 100);
+								printf("linkage test for tp:%d\r\n",inputBuf->IN.devIn.devData.thpStaInput.tempValue);
+								
+								inputBuf->IN.devIn.devAction.THPState.temp = 1;
+								termNum ++;
+							}else if(strcmp(js_ss->string,"HY") == 0)
+							{
+								memcpy(tempString,js_ss->valuestring,strlen(js_ss->valuestring));
+								tempF = Atof(&tempString[0]);
+								inputBuf->IN.devIn.devData.thpStaInput.humiValue = (uint16_t)(tempF * 100);
+								printf("linkage test for hy:%d\r\n",inputBuf->IN.devIn.devData.thpStaInput.humiValue);
+								
+								inputBuf->IN.devIn.devAction.THPState.humi = 1;
+								termNum ++;
+							}
+							js_ss = js_ss->next;
+						}
+						break;
+					default:
+						ret = -1;
+						break;
+				}
+			}else{
+				printf("the linkage input json not have dev state\r\n");
+				ret -1;
+				break;
+			}
+		}else if(inputBuf->type == SCENE_LIST_TIMER_PAYLOAD){//time input
+			printf("linkage input for time\r\n");
+			js_temp = json_get_object_item(inputPl,"TM");
+			if(js_temp != NULL)
+			{
+				js_ss = js_temp->child;
+				while(js_ss != NULL)
+				{
+					if(strcmp(js_ss->string,"TS") == 0){
+						do{
+							if(js_ss != NULL)
+							{
+								
+								oidCount = json_get_array_size(js_ss);
+								if(oidCount == 4)
+								{
+									for(i = 0; i < oidCount; i ++)
+									{
+										js_value = json_get_array_item(js_ss,i);
+										if(js_value !=  NULL)
+										{
+											if(i == 0)
+											{
+												inputBuf->IN.timeIn.month = js_value->valueint;
+											}else if(i == 1){
+												inputBuf->IN.timeIn.day = js_value->valueint;
+											}else if(i == 2){
+												inputBuf->IN.timeIn.hour = js_value->valueint;
+											}else if(i == 3){
+												inputBuf->IN.timeIn.min = js_value->valueint;
+											}
+										}else{
+											printf("the time start was error\r\n");
+											ret = -1;
+										}
+									}
+								}else{
+									printf("the js count was error\r\n ");
+									ret = -1;
+								}
+							}else{
+								printf("the js for time was null\r\n");
+								ret = -1;
+							}
+						}while(0);
+					}else if(strcmp(js_ss->string,"WF") == 0)
+					{
+						inputBuf->IN.timeIn.wkflag = js_ss->valueint;
+					}
+					js_ss = js_ss->next;
+				}
+				if(ret == 0)
+				{
+					printf("set time was input term success\r\n");
+					termNum = 1;
+				}else{
+					printf("set time was input term faild\r\n");
+					ret = -1;
+				}
+			}
+		}else{
+			printf("in linkage input type was not valid\r\n");
+			ret -1;
+			break;
+		}
+	}while(0);
+	if(ret == 0)
+	{
+		if(termNum != 1)//触发条件只允许一个
+		{
+			printf("linkage input term num was not valid\r\n");
+			ret = -1;
+		}else{
+			inputBuf->triggering = 0;// 该字段用于判断是否触发，所以在写flash之前先要将该字段请零
+			inputBuf->valid = 1;
+		}
+	}
+	return ret;
+
+}
+
+/*******************************************************************
+添加联动，lkid为联动id，当其为无效ID时，由网关自动创建
+一个ID号；如果为有效联动ID，则网关在原来的联动上更新
+联动信息
+*********************************************************************/
+
+
+int userAddLinkageFunc(json_t *linkagePl,uint8_t lkId)
+{
+	uint8_t i;
+	int ret = 0;
+	uint8_t nLen;
+	uint8_t tempNum;
+	uint32_t oidCount;
+	json_t *js_child,*js_name,*js_enable,*js_col,*js_cel,*js_exe,*js_outInfo,*js_se,*js_temp;
+	HM_GW_LIST *pgw_info=&gw_info;
+	uint8_t linkageID = INVALID_SCENE_LINKAGE_INDEX;
+	uint8_t tmIndex;
+	printf("test for add linkage\r\n");
+	js_name = json_get_object_item(linkagePl,"NA");
+	js_enable = json_get_object_item(linkagePl,"EB");
+	js_exe = json_get_object_item(linkagePl,"EXL");
+	js_col = json_get_object_item(linkagePl,"COL");
+	js_cel = json_get_object_item(linkagePl,"CEL");
+	if((js_name == NULL) || (js_enable == NULL) || (js_exe == NULL) || (js_col == NULL))
+	{
+		printf("the linkage json was not valid\r\n");
+		return -1;
+	}
+	if(lkId == INVALID_SCENE_LINKAGE_INDEX)
+	{
+		linkageID = findFreeLinkageIndex();
+	}else{
+		tmIndex = lkId % 10;
+		if(devNumInfo.linkageIndex[tmIndex] == lkId)
+		{
+			linkageID = lkId;	
+			memset((char*) &pgw_info->linkage_list[tmIndex],0,sizeof(LINKAGEINFO));
+		}else{
+			linkageID = findFreeLinkageIndex();
+		}
+	}
+	printf("linkage id:%d\r\n",linkageID);
+	if(linkageID != INVALID_SCENE_LINKAGE_INDEX)
+	{
+		tmIndex = linkageID % 10;
+		printf("the index :%d\r\n",tmIndex);
+
+		if(userCreatLinkageInputData(js_col,&pgw_info->linkage_list[tmIndex].inputInfo) != 0)//creat linkage input
+		{
+			printf("creat linkage input term was faild\r\n");
+			return -1;
+		}
+
+		if(js_cel != NULL)// creat linkage check
+		{
+			printf("start creat linkage check term\r\n");
+			oidCount = json_get_array_size(js_cel);
+			if(oidCount > MAX_CHECK_NUM)
+			{
+				printf("creat linkage check term was faild,the check num was too long\r\n");
+				return -1;
+			}
+			tempNum = 0;
+			for(i = 0; i < oidCount; i ++)
+			{
+				js_outInfo = json_get_array_item(js_cel,i);
+				if(js_outInfo != NULL)
+				{
+					if(userCreatLinkageCheckBuf(js_outInfo,&pgw_info->linkage_list[tmIndex].checkInfo[tempNum]) == 0)
+					{
+						tempNum ++;
+					}
+				}
+			}
+			if(tempNum == oidCount)
+			{
+				pgw_info->linkage_list[tmIndex].checkNum = tempNum;
+			}else{
+				printf("creat linkage check term was faild,the check num creat error\r\n");
+				return -1;
+			}
+		}
+		
+
+
+		tempNum = 0;
+		if(js_exe != NULL)//creat linkage output
+		{
+			oidCount = json_get_array_size(js_exe);
+			if(oidCount > MAX_OUTPUT_NUM)
+			{
+				printf("the linkage output num was too long\r\n");
+				return -1;
+			}
+			
+			for(i = 0; i < oidCount; i ++)
+			{
+				js_outInfo = json_get_array_item(js_exe,i);
+				if(js_outInfo != NULL)
+				{
+					
+					if(userCreatLinkageDevActionData(js_outInfo,&pgw_info->linkage_list[tmIndex].outputInfo[tempNum]) == 0)
+					{
+						tempNum ++;
+					}else{
+						printf("creat the linkage output was error,cretat next now\r\n");
+					}
+				}
+			}
+			if(tempNum !=  oidCount)
+			{
+				printf("creat linkage output num was error\r\n");
+				return -1;
+			}
+		}
+		if(tempNum > 0)
+		{
+			devNumInfo.linkageNum ++;
+			printf("the linkage num:%d\r\n",devNumInfo.linkageNum);
+			devNumInfo.linkageIndex[tmIndex] = linkageID;
+			pgw_info->linkage_cnt = devNumInfo.linkageNum;
+			pgw_info->linkage_list[tmIndex].valid = 1;
+			pgw_info->linkage_list[tmIndex].head = 0xaa;
+			pgw_info->linkage_list[tmIndex].end = 0x55;
+			pgw_info->linkage_list[tmIndex].linkageId = linkageID;
+			pgw_info->linkage_list[tmIndex].outputNum = tempNum;
+			pgw_info->linkage_list[tmIndex].Enable = js_enable->valueint;
+			nLen = strlen(js_name->valuestring);
+			if(nLen >= NAME_MAX_LEN)
+			{
+				nLen = NAME_MAX_LEN -1;
+			}
+			memcpy(pgw_info->linkage_list[tmIndex].linkName,js_name->valuestring,nLen);
+			userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->linkage_list[tmIndex],FLASH_BASIC_ADDR + START_ADDR_FLASH_LINKAGE_OFFSET+ tmIndex * BASIC_LINKAGE_INFO_SIZE,sizeof(LINKAGEINFO));
+			userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+			ret = linkageID;
+
+
+			
+			userInitTheLinkageTimerEvent((char*) &pgw_info->linkage_list[tmIndex]);//linkage 触发条件如果为时间，需要添加到定时器列表中
+		}else{
+			printf("add linkage was error for output dev num was 0\r\n");
+			ret = -1;
+		}
+	}else{
+		printf("the linkage was full,not allow add it now\r\n");
+		ret = -1;
+	}
+	return ret;
+}
+
+
+
+
+
+/*********************************************************************
+场景执行函数
+*********************************************************************/
+int userDealSceneForSceneId(uint8_t sceneId,uint8_t dealMode)
+{
+	int ret = 0;
+	uint8_t i,j;
+	HM_GW_LIST *pgw_info=&gw_info;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t scIndex = sceneId % 10;
+	uint8_t sceneFlashSave = 0;
+	uint8_t needSaveFlashFlag = 0;
+	uint8_t needSaveNumFlag = 0;
+	uint8_t outputNum = 0;
+	uint8_t tmEp1 = 0xff,tmEp2 = 0xff,tmEp3 = 0xff,tmEp4 = 0xff;
+	OUTPUTINFO output;
+	
+	if((devNumInfo.sceneIndex[scIndex] == sceneId))
+	{
+		if(pgw_info->scene_list[scIndex].valid == 1)
+		{
+			//if(dealMode == 1)//直接处理，不用再延时，用于定时器后的执行场景动作
+
+			if((pgw_info->scene_list[scIndex].delay == 0) || (dealMode == 1))
+			{
+				for(i = 0; i < MAX_OUTPUT_NUM; i ++)
+				{
+					printf("exe scnen output index :%d\r\n",pgw_info->scene_list[scIndex].outDevInfo[i].devAction.modeByte);
+					if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.modeByte == 0)
+					{
+						continue;
+					}
+					if(pgw_info->scene_list[scIndex].outDevInfo[i].type == SCENE_LIST_GW_PAYLOAD)
+					{
+						printf("deal gw scene\r\n");
+						if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.GWStat.armtype == 1)
+						{
+							if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.gwOutput.armType == SENSOR_DISARM){
+								hmSetAllSensorDisarm();
+								if(beep_info.work_flag == 0 )
+								 {
+									 beep_info.work_type = BEEP_DISARM;
+									 beep_info.work_flag = 1;
+									 tx_semaphore_put(&beep_semaphore_ptr);
+								 }
+								 if(hmIotsDevInfo.sensor_arm_type != SENSOR_DISARM)
+								 {
+									 hmIotsDevInfo.sensor_arm_type = SENSOR_DISARM;
+									 needSaveFlashFlag = 1;
+								 }
+							}else if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.gwOutput.armType == SENSOR_HOME_ARM){
+								hmSetAllSensorHomeArm();
+								if((beep_info.work_flag == 0) && ((beep_info.work_type != BEEP_ALARM) && (beep_info.work_type != BEE_SOUND_LOCAL_REGULA)))
+								 {
+									 beep_info.work_type = BEEP_HOME_ARM;
+									 beep_info.work_flag = 1;
+									 tx_semaphore_put(&beep_semaphore_ptr);
+								 }
+								if(hmIotsDevInfo.sensor_arm_type != SENSOR_HOME_ARM)
+								 {
+									 hmIotsDevInfo.sensor_arm_type = SENSOR_HOME_ARM;
+									 needSaveFlashFlag = 1;
+								 }
+							}else if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.gwOutput.armType == SENSOR_ARM){
+								hmSetAllSensorArm();
+								if((beep_info.work_flag == 0) && ((beep_info.work_type != BEEP_ALARM) && (beep_info.work_type != BEE_SOUND_LOCAL_REGULA)))
+								 {
+									 beep_info.work_type = BEEP_ARM;
+									 beep_info.work_flag = 1;
+									 tx_semaphore_put(&beep_semaphore_ptr);
+								 }
+								if(hmIotsDevInfo.sensor_arm_type != SENSOR_ARM)
+								 {
+									 hmIotsDevInfo.sensor_arm_type = SENSOR_ARM;
+									 needSaveFlashFlag = 1;
+								 }
+							}else{
+								printf("in scene deal:the arm mode is not valid\r\n");
+							}
+
+							if(needSaveFlashFlag == 1)
+							{
+								userFlashWriteSysInfoFunc((uint8_t*)&hmIotsDevInfo);
+							}
+						}
+						if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.GWStat.gwlightonoff == 1)
+						{
+							hmIotsDevInfo.light_onoff = pgw_info->scene_list[scIndex].outDevInfo[i].devData.gwOutput.lightOnoff;
+						}
+					}else if(pgw_info->scene_list[scIndex].outDevInfo[i].type == SCENE_LIST_ZB_DEV_PAYLOAD){
+						printf("deal gw scene ,dev index:%d\r\n",pgw_info->scene_list[scIndex].outDevInfo[i].targetId);
+						pni_temp = findInDevListByIndex(pgw_info->scene_list[scIndex].outDevInfo[i].targetId);
+						if(pni_temp == NULL)
+						{
+							printf("in deal scene:the index was not in dev list\r\n");
+							memset(&pgw_info->scene_list[scIndex].outDevInfo[i],0,sizeof(OUTPUTINFO));
+							sceneFlashSave = 1;
+							continue;
+						}else{
+							switch(pni_temp->devType)
+							{
+								case NODE_INFO_TYPE_LIGHT_RGB:
+									printf("deal scene output for RGB\r\n");
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.RGBSet.onoff == 1)
+									{
+										if(pni_temp->epList[0].devData.colorStateApp.onOffStatus != pgw_info->scene_list[scIndex].outDevInfo[i].devData.rgbOutput.onoff)
+										{
+											userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[0].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.rgbOutput.onoff);	
+											qcom_thread_msleep(20);
+										}
+									}
+									
+									
+									if((pgw_info->scene_list[scIndex].outDevInfo[i].devAction.RGBSet.colour_r == 1) ||
+									   (pgw_info->scene_list[scIndex].outDevInfo[i].devAction.RGBSet.colour_g == 1) ||
+									    (pgw_info->scene_list[scIndex].outDevInfo[i].devAction.RGBSet.colour_b == 1))
+									{
+										printf("control for rgb\r\n");
+										pni_temp->epList[0].ep,pni_temp->epList[0].devData.colorStateApp.rgb_r = pgw_info->scene_list[scIndex].outDevInfo[i].devData.rgbOutput.rgb_r;
+										pni_temp->epList[0].ep,pni_temp->epList[0].devData.colorStateApp.rgb_g = pgw_info->scene_list[scIndex].outDevInfo[i].devData.rgbOutput.rgb_g;
+										pni_temp->epList[0].ep,pni_temp->epList[0].devData.colorStateApp.rgb_b = pgw_info->scene_list[scIndex].outDevInfo[i].devData.rgbOutput.rgb_b;
+										userFillUartCmdForColorControl(pni_temp->shortAddr,pni_temp->epList[0].ep,pni_temp->epList[0].devData.colorStateApp.rgb_r,
+										pni_temp->epList[0].devData.colorStateApp.rgb_g,pni_temp->epList[0].devData.colorStateApp.rgb_b);
+										qcom_thread_msleep(20);
+									}
+
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.RGBSet.level == 1)
+									{
+										printf("control for level\r\n");
+										if(pni_temp->epList[0].devData.colorStateApp.level != pgw_info->scene_list[scIndex].outDevInfo[i].devData.rgbOutput.level)
+										{
+											userFillUartCmdForLevel(pni_temp->shortAddr,pni_temp->epList[0].ep,MOVE_TO_LEVEL_WTONOFF,pgw_info->scene_list[scIndex].outDevInfo[i].devData.rgbOutput.level,0);	
+											qcom_thread_msleep(20);
+										}
+									}
+									break;
+								case NODE_INFO_TYPE_AI1SW:
+								case NODE_INFO_TYPE_AI2SW:
+								case NODE_INFO_TYPE_AI3SW:
+									printf("deal scene output for switch\r\n");
+									for(j = 0; j < pni_temp->epNum; j ++)
+									{
+										if(pni_temp->epList[j].ep == 1)
+										{
+											tmEp1 = j;
+										}else if(pni_temp->epList[j].ep == 2){
+											tmEp2 = j;
+										}else if(pni_temp->epList[j].ep == 3){
+											tmEp3 = j;
+										}
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.SWSet.onoff1 == 1)
+									{
+										if(tmEp1 != 0xff)
+										{
+											//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.switchOutput.onoff1 != pni_temp->epList[tmEp1].devData.witchStateApp.onOffStatus)
+											{
+												userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.switchOutput.onoff1);
+												qcom_thread_msleep(20);
+											}
+										}
+									}
+
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.SWSet.onoff2 == 1)
+									{
+										if(tmEp2 != 0xff)
+										{
+											//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.switchOutput.onoff2 != pni_temp->epList[tmEp2].devData.witchStateApp.onOffStatus)
+											{
+												userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.switchOutput.onoff2);
+												qcom_thread_msleep(20);
+											}
+										}
+									}
+									
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.SWSet.onoff3 == 1)
+									{
+										if(tmEp3 != 0xff)
+										{
+											//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.switchOutput.onoff3 != pni_temp->epList[tmEp3].devData.witchStateApp.onOffStatus)
+											{
+												userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp3].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.switchOutput.onoff3);
+												qcom_thread_msleep(20);
+											}
+										}
+									}
+									break;
+								case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+									printf("deal scene output for cut rgb\r\n");
+									for(j = 0; j < pni_temp->epNum; j ++)
+									{
+										if(pni_temp->epList[j].ep == 1)
+										{
+											tmEp1 = j;
+										}else if(pni_temp->epList[j].ep == 2){
+											tmEp2 = j;
+										}else if(pni_temp->epList[j].ep == 3){
+											tmEp3 = j;
+										}else if(pni_temp->epList[j].ep == 4){
+											tmEp4= j;
+										}
+									}
+									//on off
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.onoffList1 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.onoff1 != pni_temp->epList[tmEp1].devData.cstRgbStateApp.onOffStatus)
+										{
+											userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.onoff1);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.onoffList2 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.onoff2 != pni_temp->epList[tmEp2].devData.cstRgbStateApp.onOffStatus)
+										{
+											userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.onoff2);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.onoffList3 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.onoff3 != pni_temp->epList[tmEp3].devData.cstRgbStateApp.onOffStatus)
+										{
+											userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp3].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.onoff3);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.onoffList4 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.onoff4 != pni_temp->epList[tmEp4].devData.cstRgbStateApp.onOffStatus)
+										{
+											userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp4].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.onoff4);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+
+
+									//brightness 
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.brightnessList1 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.brightness1 != pni_temp->epList[tmEp1].devData.cstRgbStateApp.brightness)
+										{
+											userFillUartCmdForBrightness(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.brightness1);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.brightnessList2 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.brightness2 != pni_temp->epList[tmEp2].devData.cstRgbStateApp.brightness)
+										{
+											userFillUartCmdForBrightness(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.brightness2);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.brightnessList3 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.brightness3 != pni_temp->epList[tmEp3].devData.cstRgbStateApp.brightness)
+										{
+											userFillUartCmdForBrightness(pni_temp->shortAddr,pni_temp->epList[tmEp3].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.brightness3);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.brightnessList4 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.brightness4 != pni_temp->epList[tmEp4].devData.cstRgbStateApp.brightness)
+										{
+											userFillUartCmdForBrightness(pni_temp->shortAddr,pni_temp->epList[tmEp4].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.brightness4);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+
+									//color temperature
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.colorTempList1 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.colorTemp1!= pni_temp->epList[tmEp1].devData.cstRgbStateApp.brightness)
+										{
+											userFillUartCmdForColorTemperature(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.colorTemp1);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.colorTempList2 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.colorTemp2!= pni_temp->epList[tmEp2].devData.cstRgbStateApp.brightness)
+										{
+											userFillUartCmdForColorTemperature(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.colorTemp2);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.colorTempList3 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.colorTemp3!= pni_temp->epList[tmEp3].devData.cstRgbStateApp.brightness)
+										{
+											userFillUartCmdForColorTemperature(pni_temp->shortAddr,pni_temp->epList[tmEp3].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.colorTemp3);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.CUTRGBSet.colorTempList4 == 1)
+									{
+
+										//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.colorTemp4!= pni_temp->epList[tmEp4].devData.cstRgbStateApp.brightness)
+										{
+											userFillUartCmdForColorTemperature(pni_temp->shortAddr,pni_temp->epList[tmEp4].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.cutRgbOutput.colorTemp4);
+										}
+										qcom_thread_msleep(20);
+										
+									}
+									break;
+								case NODE_INFO_TYPE_RELAY_CONTROL:
+									printf("scene output for relay\r\n");
+									break;
+								case NODE_INFO_TYPE_AI_SOCKET_USB:
+									printf("scene output for usb plug\r\n");
+									for(j = 0; j < pni_temp->epNum; j ++)
+									{
+										if(pni_temp->epList[j].ep == 1)
+										{
+											tmEp1 = j;
+										}else if(pni_temp->epList[j].ep == 2){
+											tmEp2 = j;
+										}
+									}
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.UPlugSet.relayOnoff == 1)
+									{
+										if(tmEp1 != 0xff)
+										{
+											//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.uplugOutput.onoff_r != pni_temp->epList[tmEp1].devData.onoffOutStateApp.onOffStatus)
+											{
+												userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp1].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.uplugOutput.onoff_r);
+												qcom_thread_msleep(20);
+											}
+										}
+									}
+									
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.UPlugSet.usbOnoff == 1)
+									{
+										if(tmEp2 != 0xff)
+										{
+											//if(pgw_info->scene_list[scIndex].outDevInfo[i].devData.uplugOutput.onoff_u != pni_temp->epList[tmEp2].devData.onoffOutStateApp.onOffStatus)
+											{
+												userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[tmEp2].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.uplugOutput.onoff_u);
+												qcom_thread_msleep(20);
+											}
+										}
+									}
+									break;
+								case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+									printf("scene output for smart plug\r\n");
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.SPlugSet.relayOnoff == 1)
+									{
+										//if(pni_temp->epList[0].devData.splugStateApp.onOffStatus != pgw_info->scene_list[scIndex].outDevInfo[i].devData.splugOutput.onoff)
+										{
+											userFillUartCmdForOnOff(pni_temp->shortAddr,pni_temp->epList[0].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.splugOutput.onoff);	
+											qcom_thread_msleep(20);
+										}
+									}
+									break;
+								case NODE_INFO_TYPE_WARNING_DEV: 
+									printf("scene output for wd\r\n");
+									if(pgw_info->scene_list[scIndex].outDevInfo[i].devAction.WDSet.onoff == 1)
+									{
+										userAppControlWDFunc(pni_temp->shortAddr,pni_temp->epList[0].ep,pgw_info->scene_list[scIndex].outDevInfo[i].devData.wdOutput.onoff,pni_temp->epList[0].devData.wdStateApp.duration);
+										qcom_thread_msleep(20);
+									}
+								default:
+									printf("in deal scene:the index dev was not controled\r\n");
+									break;
+							}
+						}
+					}else{
+						printf("unknow se for gw ,in deal scene,delete the node output\r\n");
+						//delete
+						memset(&pgw_info->scene_list[scIndex].outDevInfo[i],0,sizeof(OUTPUTINFO));
+						sceneFlashSave = 1;
+						continue;
+					}
+				}
+				outputNum ++;
+				qcom_thread_msleep(20);
+			}else{
+				printf("in deal scene:timer for output\r\n");
+				output.type = SCENE_LIST_SCENE_PAYLOAD;
+				output.targetId = sceneId;
+				output.valid = 1;
+				userAddDelayToTimerEvent(pgw_info->scene_list[scIndex].delay,output);
+				return 0;
+			}
+			
+		}
+	}else{
+		printf("the scene id was not valid:%d\r\n",sceneId);
+		ret = -1;
+		return ret;
+	}
+
+	if((outputNum == 0) && (scIndex >= 3))//输出所有动作无效，且不为默认的前三个场景，则删除该场景
+	{
+		printf("the scene output num was 0\r\n");
+		needSaveNumFlag = 1;
+		sceneFlashSave = 1;
+		memset((char*) &pgw_info->scene_list[scIndex],0,sizeof(SCENEINFO));
+	}
+
+	if(needSaveNumFlag == 1)
+	{
+		devNumInfo.sceneIndex[scIndex] = INVALID_SCENE_LINKAGE_INDEX;
+		devNumInfo.sceneNum --;
+		userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+		ret = -1;
+	}
+	
+	if(sceneFlashSave == 1)
+	{
+		userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->scene_list[scIndex],FLASH_BASIC_ADDR + START_ADDR_FLASH_SCENE_OFFSET+ scIndex * BASIC_LINKAGE_INFO_SIZE,sizeof(SCENEINFO));
+	}
+	return ret;
+}
+
+/**************************************************
+创建场景输出设备列表
+****************************************************/
+int userCreatSceneDevActionData(json_t *js_se,OUTPUTINFO *outPut)
+{
+	int ret = 0;
+	json_t *js_child,*js_value;
+	uint8_t oidCount,i;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t actionNum = 0;
+	if((js_se == NULL) || (outPut == NULL))
+	{
+		printf("scene out dev action se was null\r\n");
+		return -1;
+	}
+	
+	if(outPut->type == SCENE_LIST_GW_PAYLOAD)
+	{
+		printf("scene test 444444:%s\r\n",js_se->string);
+		while(js_se != NULL)
+		{
+			printf("scene test 555555555\r\n");
+			if(strcmp(js_se->string,"LO") == 0)
+			{
+				printf("test for lo\r\n");
+				outPut->devData.gwOutput.lightOnoff = js_se->valueint;
+				outPut->devAction.GWStat.gwlightonoff = 1;
+				actionNum ++; 
+			}else if(strcmp(js_se->string,"AT") == 0){
+				outPut->devData.gwOutput.armType = js_se->valueint;
+				outPut->devAction.GWStat.armtype = 1;
+				actionNum ++; 
+			}
+			js_se = js_se->next;
+		}
+		outPut->delay = 0;
+	}else if(outPut->type == SCENE_LIST_ZB_DEV_PAYLOAD){
+		pni_temp = findInDevListByIndex(outPut->targetId);
+		if(pni_temp == NULL)
+		{
+			printf("in scene out create: the index dev was not fond in dev list\r\n");
+			return -1;
+		}
+		switch(pni_temp->devType)
+		{
+			case NODE_INFO_TYPE_LIGHT_RGB:
+				printf("scene output for RGB\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"OF") == 0)
+					{
+						outPut->devData.rgbOutput.onoff = js_se->valueint;
+						outPut->devAction.RGBSet.onoff = 1;
+						actionNum ++; 
+					}else if(strcmp(js_se->string,"LE") == 0){
+						outPut->devData.rgbOutput.level = js_se->valueint;
+						outPut->devAction.RGBSet.level = 1;
+						actionNum ++; 
+					}else if(strcmp(js_se->string,"CR") == 0){
+						outPut->devData.rgbOutput.rgb_r = js_se->valueint;
+						outPut->devAction.RGBSet.colour_r= 1;
+						actionNum ++; 
+					}else if(strcmp(js_se->string,"CG") == 0){
+						outPut->devData.rgbOutput.rgb_g = js_se->valueint;
+						outPut->devAction.RGBSet.colour_g = 1;
+						actionNum ++; 
+					}else if(strcmp(js_se->string,"CB") == 0){
+						outPut->devData.rgbOutput.rgb_b = js_se->valueint;
+						outPut->devAction.RGBSet.colour_b = 1;
+						actionNum ++; 
+					}
+					js_se = js_se->next;
+				}
+				outPut->delay = 0;
+				break;
+			case NODE_INFO_TYPE_AI1SW:
+			case NODE_INFO_TYPE_AI2SW:
+			case NODE_INFO_TYPE_AI3SW:
+				printf("scene output for switch\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"OF1") == 0)
+					{
+						outPut->devData.switchOutput.onoff1 = js_se->valueint;
+						outPut->devAction.SWSet.onoff1 = 1;
+						actionNum ++; 
+					}else if(strcmp(js_se->string,"OF2") == 0){
+						outPut->devData.switchOutput.onoff2 = js_se->valueint;
+						outPut->devAction.SWSet.onoff2 = 1;
+						actionNum ++; 
+					}else if(strcmp(js_se->string,"OF3") == 0){
+						outPut->devData.switchOutput.onoff3 = js_se->valueint;
+						outPut->devAction.SWSet.onoff3 = 1;
+						actionNum ++; 
+					}
+					js_se = js_se->next;
+				}
+				outPut->delay = 0;
+				break;
+			case NODE_INFO_TYPE_CUSTOM_RGB_AREA:
+				printf("scene output for cut rgb\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"OFL") == 0)
+					{
+						do{
+							oidCount = json_get_array_size(js_se);
+							if(oidCount == 4)
+							{
+								for(i = 0; i < oidCount; i ++)
+								{
+									js_value = json_get_array_item(js_se,i);
+									if(js_value !=  NULL)
+									{
+										if(i == 0)
+										{
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.onoff1 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.onoffList1 = 1;
+												actionNum ++;
+											}
+										}else if(i == 1){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.onoff2 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.onoffList2 = 1;
+												actionNum ++;
+											}
+										}else if(i == 2){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.onoff3 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.onoffList3 = 1;
+												actionNum ++;
+											}
+										}else if(i == 3){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.onoff4 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.onoffList4 = 1;
+												actionNum ++;
+											}
+										}
+									}else{
+										printf("the ofl array start was error\r\n");
+										ret = -1;
+									}
+								}
+							}else{
+								printf("the js count was error\r\n ");
+								ret = -1;
+							}
+						}while(0);
+						if(ret == -1)
+						{
+							break;
+						}
+					}else if(strcmp(js_se->string,"LEL") == 0){
+						do{
+							oidCount = json_get_array_size(js_se);
+							if(oidCount == 4)
+							{
+								for(i = 0; i < oidCount; i ++)
+								{
+									js_value = json_get_array_item(js_se,i);
+									if(js_value !=  NULL)
+									{
+										if(i == 0)
+										{
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.brightness1 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.brightnessList1 = 1;
+												actionNum ++;
+											}
+										}else if(i == 1){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.brightness2 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.brightnessList2 = 1;
+												actionNum ++;
+											}
+										}else if(i == 2){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.brightness3 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.brightnessList3 = 1;
+												actionNum ++;
+											}
+										}else if(i == 3){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.brightness4 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.brightnessList4 = 1;
+												actionNum ++;
+											}
+										}
+									}else{
+										printf("the time start was error\r\n");
+										ret = -1;
+									}
+								}
+							}else{
+								printf("the js count was error\r\n ");
+								ret = -1;
+							}
+						}while(0);
+						if(ret == -1)
+						{
+							break;
+						}
+					}else if(strcmp(js_se->string,"CWL") == 0){
+						do{
+							oidCount = json_get_array_size(js_se);
+							if(oidCount == 4)
+							{
+								for(i = 0; i < oidCount; i ++)
+								{
+									js_value = json_get_array_item(js_se,i);
+									if(js_value !=  NULL)
+									{
+										if(i == 0)
+										{
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.colorTemp1 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.colorTempList1 = 1;
+												actionNum ++;
+											}
+										}else if(i == 1){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.colorTemp2 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.colorTempList2 = 1;
+												actionNum ++;
+											}
+										}else if(i == 2){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.colorTemp3 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.colorTempList3 = 1;
+												actionNum ++;
+											}
+										}else if(i == 3){
+											if(js_value->valueint != -1)
+											{
+												outPut->devData.cutRgbOutput.colorTemp4 = js_value->valueint;
+												outPut->devAction.CUTRGBSet.colorTempList4 = 1;
+												actionNum ++;
+											}
+										}
+									}else{
+										printf("the time start was error\r\n");
+										ret = -1;
+									}
+								}
+							}else{
+								printf("the js count was error\r\n ");
+								ret = -1;
+							}
+						}while(0);
+						if(ret == -1)
+						{
+							break;
+						}
+					}
+					
+					js_se = js_se->next;
+				}
+				outPut->delay = 0;
+				break;
+			case NODE_INFO_TYPE_RELAY_CONTROL:
+				printf("scene output for relay\r\n");
+				break;
+			case NODE_INFO_TYPE_AI_SOCKET_USB:
+				printf("scene output for usb plug\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"RO") == 0)
+					{
+						outPut->devData.uplugOutput.onoff_r = js_se->valueint;
+						outPut->devAction.UPlugSet.relayOnoff = 1;
+						actionNum ++; 
+					}else if(strcmp(js_se->string,"UO") == 0){
+						outPut->devData.uplugOutput.onoff_u = js_se->valueint;
+						outPut->devAction.UPlugSet.usbOnoff = 1;
+						actionNum ++; 
+					}
+					js_se = js_se->next;
+				}	
+				outPut->delay = 0;
+				break;
+			case NODE_INFO_TYPE_AI_SOCKET_MEASURE:
+				printf("scene output for smart plug\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"RO") == 0)
+					{
+						printf("test for ro\r\n");
+						outPut->devData.splugOutput.onoff = js_se->valueint;
+						outPut->devAction.SPlugSet.relayOnoff = 1;
+						actionNum ++; 
+					}
+					js_se = js_se->next;
+				}
+				outPut->delay = 0;
+				break;
+			case NODE_INFO_TYPE_WARNING_DEV:
+				printf("scene output for warming dev\r\n");
+				while(js_se != NULL)
+				{
+					if(strcmp(js_se->string,"OF") == 0)
+					{
+						printf("test for OF\r\n");
+						outPut->devData.wdOutput.onoff = js_se->valueint;
+						outPut->devAction.WDSet.onoff = 1;
+						actionNum ++; 
+					}
+					js_se = js_se->next;
+				}
+				outPut->delay = 0;
+				break;				
+			default:
+				ret = -1;
+				break;
+		}
+	}else{
+		ret = -1;
+	}
+	if(ret == 0)
+	{
+		if(actionNum > 0)
+		{
+			outPut->valid = 1;
+		}else{
+			ret = -1;
+		}
+	}
+	return ret;
+}
+
+/******************************************************************
+增加场景函数，scenePl为json字段，
+scId为场景ID，当输入为无效ID时，为增加场景ID，
+当输入为有效ID时，为更新场景信息
+*******************************************************************/
+int userAddSceneFunc(json_t *scenePl,uint8_t scId)
+{
+	uint8_t i;
+	int ret = 0;
+	uint8_t nLen;
+	uint8_t tempNum;
+	uint32_t oidCount;
+	uint8_t sceneActionForAdd = 0;
+	json_t *js_name,*js_delay,*js_exe,*js_outInfo,*js_se,*js_temp,*js_icon;
+	HM_GW_LIST *pgw_info=&gw_info;
+	uint8_t sceneID = INVALID_SCENE_LINKAGE_INDEX;
+	uint8_t tmIndex;
+	printf("test for add scene\r\n");
+	js_name = json_get_object_item(scenePl,"NA");
+	js_delay = json_get_object_item(scenePl,"CT");
+	js_exe = json_get_object_item(scenePl,"EXL");
+	js_icon = json_get_object_item(scenePl,"ICON");
+	if((js_name == NULL) || (js_delay == NULL) || (js_exe == NULL))
+	{
+		printf("the scene json was not valid\r\n");
+		return -1;
+	}
+	if(scId == INVALID_SCENE_LINKAGE_INDEX)
+	{
+		sceneID = findFreeSceneIndex();
+		sceneActionForAdd = 1;
+	}else{
+		tmIndex = scId % 10;
+		if(devNumInfo.sceneIndex[tmIndex] == scId)
+		{
+			sceneID = scId;	
+			memset((char*) &pgw_info->scene_list[tmIndex],0,sizeof(SCENEINFO));
+		}else{
+			sceneID = findFreeSceneIndex();
+			sceneActionForAdd = 1;
+		}
+	}
+	printf("scene id:%d\r\n",sceneID);
+	if(sceneID != INVALID_SCENE_LINKAGE_INDEX)
+	{
+		tmIndex = sceneID % 10;
+		printf("the index :%d\r\n",tmIndex);
+		oidCount = json_get_array_size(js_exe);
+		
+		tempNum = 0;
+		for(i = 0; i < oidCount; i ++)
+		{
+			js_outInfo = json_get_array_item(js_exe,i);
+
+			if(js_outInfo != NULL)
+			{
+				
+				js_temp = json_get_object_item(js_outInfo,"TY");
+				if(js_temp != NULL)
+				{
+					pgw_info->scene_list[tmIndex].outDevInfo[tempNum].type = js_temp->valueint;
+				}else{
+					printf("the json not have type\r\n");
+					return -1;
+				}
+
+				
+				js_temp = json_get_object_item(js_outInfo,"ZX");
+				if(js_temp != NULL)
+				{
+					pgw_info->scene_list[tmIndex].outDevInfo[tempNum].targetId = js_temp->valueint;
+				}
+				
+
+				js_temp = json_get_object_item(js_outInfo,"SE");
+				if(js_temp != NULL)
+				{
+					if(userCreatSceneDevActionData(js_temp->child,&pgw_info->scene_list[tmIndex].outDevInfo[tempNum]) != -1)
+					{
+						tempNum ++;
+						if(tempNum >= MAX_OUTPUT_NUM)
+						{
+							break;
+						}
+					}
+				}else{
+					printf("the json not have se\r\n");
+					return -1;
+				}
+			}
+		}
+		if(tempNum > 0)
+		{
+			if(sceneActionForAdd == 1)
+			{
+				devNumInfo.sceneNum ++;
+			}
+			printf("the scene num:%d\r\n",devNumInfo.sceneNum);
+			devNumInfo.sceneIndex[tmIndex] = sceneID;
+			pgw_info->scene_cnt = devNumInfo.sceneNum;
+			pgw_info->scene_list[tmIndex].valid = 1;
+			pgw_info->scene_list[tmIndex].head = 0xaa;
+			pgw_info->scene_list[tmIndex].end = 0x55;
+			pgw_info->scene_list[tmIndex].sceneId = sceneID;
+			if(js_icon != NULL)
+			{
+				pgw_info->scene_list[tmIndex].pictureId = js_icon->valueint;
+			}
+			pgw_info->scene_list[tmIndex].delay = js_delay->valueint;
+			pgw_info->scene_list[tmIndex].outputNum = tempNum;
+			nLen = strlen(js_name->valuestring);
+			if(nLen >= NAME_MAX_LEN)
+			{
+				nLen = NAME_MAX_LEN -1;
+			}
+			memcpy(pgw_info->scene_list[tmIndex].sceneName,js_name->valuestring,nLen);
+			userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->scene_list[tmIndex],FLASH_BASIC_ADDR + START_ADDR_FLASH_SCENE_OFFSET+ tmIndex * BASIC_LINKAGE_INFO_SIZE,sizeof(SCENEINFO));
+			userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+			ret = sceneID;
+		}else{
+			printf("add scene was error for output dev num was 0\r\n");
+			ret = -1;
+		}
+	}else{
+		printf("the scene was full,not allow add it now\r\n");
+		ret = -1;
+	}
+	return ret;
+}
+
+/******************************************************************
+获取场景列表，每一个场景独立一条指令回复给
+app
+******************************************************************/
+void userReadSceneListFunc(uint32_t sn,uint8_t rcvType,uint32_t appDevId)
+{
+	uint8_t i,j;
+	json_t *js_pl,*js_oid,*js_exe,*js_array,*js_se;
+	HM_GW_LIST *pgw_info=&gw_info;
+	HM_DEV_RAM_LIST *pni_temp;
+	uint8_t outputNum = 0;
+	uint8_t sceneInfoSaveToFlash = 0;
+	uint8_t sceneNumSaveToFlash = 0;
+	uint8_t sceneNum = 0;
+	for(i = 0; i < MAX_SCENE_NUM; i ++)
+	{
+		if(devNumInfo.sceneIndex[i] != INVALID_SCENE_LINKAGE_INDEX)
+		{
+			printf("the scene id:%d\r\n",devNumInfo.sceneIndex[i]);
+			js_pl = json_create_object();
+			json_add_item_to_object(js_pl,"2.1.1.2.0",js_oid = json_create_object());
+			json_add_item_to_object(js_oid,"NA",json_create_string(pgw_info->scene_list[i].sceneName));
+			json_add_item_to_object(js_oid,"SD",json_create_number(pgw_info->scene_list[i].sceneId));
+			json_add_item_to_object(js_oid,"CT",json_create_number(pgw_info->scene_list[i].delay));
+			json_add_item_to_object(js_oid,"ICON",json_create_number(pgw_info->scene_list[i].pictureId));
+			json_add_item_to_object(js_oid,"EXL",js_array =json_create_array());
+			for(j = 0; j < MAX_OUTPUT_NUM; j ++)
+			{
+				if (pgw_info->scene_list[i].outDevInfo[j].valid == 1)
+				{
+
+					if(pgw_info->scene_list[i].outDevInfo[j].devAction.modeByte != 0)
+					{
+						if(pgw_info->scene_list[i].outDevInfo[j].type == SCENE_LIST_ZB_DEV_PAYLOAD)//dev output
+						{
+							js_se = userCreatDevSceneAndLinkageOutputSetingJsonData(pgw_info->scene_list[i].outDevInfo[j]);
+						}else if(pgw_info->scene_list[i].outDevInfo[j].type == SCENE_LIST_GW_PAYLOAD){// GW OUTPUT
+							js_se = userCreatDevSceneAndLinkageOutputSetingJsonData(pgw_info->scene_list[i].outDevInfo[j]);
+						}
+					}
+						
+					if(js_se != NULL)
+					{
+						js_exe =json_create_object();
+						json_add_item_to_object(js_exe,"ZX",json_create_number(pgw_info->scene_list[i].outDevInfo[j].targetId));
+						json_add_item_to_object(js_exe,"TY",json_create_number(pgw_info->scene_list[i].outDevInfo[j].type));
+						json_add_item_to_object(js_exe,"SE",js_se);
+						json_add_item_toarray(js_array,js_exe);
+						outputNum ++;
+						
+					}else{
+						memset((char*)&pgw_info->scene_list[i].outDevInfo[j],0,sizeof(OUTPUTINFO));
+						sceneInfoSaveToFlash = 1;
+						if(js_se != NULL)
+						{
+							json_delete(js_se);
+							js_se = NULL;
+						}
+					}
+						
+				}
+			}
+			if((outputNum > 0) || (i < 3))//输出动作有效，或者为默认的前3个场景
+			{
+				outputNum = 0;
+				userCreateJsplToBuf(js_pl,APP_CMD_RC_SUCCESS,MESSAGE_RSP_GETINFO,NULL,NULL,sn,SEND_TO_APP_DATA_NEED_ENCODE,rcvType,appDevId);
+				sceneNum ++;
+			}else{
+				memset((char*) &pgw_info->scene_list[i],0,sizeof(SCENEINFO));
+				devNumInfo.sceneIndex[i] = INVALID_SCENE_LINKAGE_INDEX;
+				devNumInfo.sceneNum -- ;
+				sceneNumSaveToFlash = 1;
+			}
+			if(sceneInfoSaveToFlash == 1)
+			{
+				sceneInfoSaveToFlash = 0;
+				userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->scene_list[i],FLASH_BASIC_ADDR + START_ADDR_FLASH_SCENE_OFFSET+ i * BASIC_SCENE_INFO_SIZE,sizeof(SCENEINFO));
+			}
+			if(js_pl != NULL)
+			{
+				json_delete(js_pl);
+				js_pl = NULL;
+			}
+			
+		}
+	}
+	if(sceneNumSaveToFlash == 1)
+	{
+		userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+	}
+	if(sceneNum == 0)
+	{
+		js_pl = json_create_object();
+		userCreateJsplToBuf(js_pl,APP_CMD_RC_SUCCESS,MESSAGE_RSP_GETINFO,NULL,NULL,sn,SEND_TO_APP_DATA_NEED_ENCODE,rcvType,appDevId);
+		if(js_pl != NULL)
+		{
+			json_delete(js_pl);
+			js_pl = NULL;
+		}
+	}
+}
+
+/********************************************************************
+删除场景函数
+**********************************************************************/
+int userDeleteSceneFromId(uint8_t sceneId)
+{
+	int ret = 0;
+	HM_GW_LIST *pgw_info=&gw_info;
+	uint8_t tmIndex = sceneId % 10;
+	if((devNumInfo.sceneIndex[tmIndex] == sceneId))
+	{
+		memset((char*)&pgw_info->scene_list[tmIndex],0,sizeof(SCENEINFO));
+		if(tmIndex < 3)//0,1,2为默认场景，只能删除其内容，不能删除名称和ID
+		{
+			pgw_info->scene_list[tmIndex].valid = 1;
+			if(tmIndex == 0)
+			{
+				pgw_info->scene_list[tmIndex].sceneId = 20;
+				memcpy(pgw_info->scene_list[tmIndex].sceneName,"LeavingMode",sizeof("LeavingMode"));
+			}else if(tmIndex == 1)
+			{
+				pgw_info->scene_list[tmIndex].sceneId = 21;
+				memcpy(pgw_info->scene_list[tmIndex].sceneName,"HomeMode",sizeof("HomeMode"));
+			}else if(tmIndex == 2)
+			{
+				pgw_info->scene_list[tmIndex].sceneId = 22;
+				memcpy(pgw_info->scene_list[tmIndex].sceneName,"SleepingMode",sizeof("SleepingMode"));
+			}
+		}else{
+			devNumInfo.sceneIndex[tmIndex] = INVALID_SCENE_LINKAGE_INDEX;
+			devNumInfo.sceneNum --;
+		}
+		userFlashWriteNumFunc((uint8_t *)&devNumInfo);
+		userFlashWriteSceneLinkageInfoFunc((uint8_t*) &pgw_info->scene_list[tmIndex],FLASH_BASIC_ADDR + START_ADDR_FLASH_SCENE_OFFSET+ tmIndex * BASIC_SCENE_INFO_SIZE,sizeof(SCENEINFO));
+	}else{
+		printf("the scene id was not exist\r\n");
+		ret = -1;
+	}
+	return ret;
+}
+
+
+/****************************************************************
+填充场景执行缓存，场景执行和联动执行用专门的一个
+任务完成，不在net deal的任务中执行场景事件
+sceneId   	:场景ID
+exeMode:场景执行模式，当为0时，考虑场景中的字段delay，
+当为1时，忽略场景字段delay，该位用于定时执行场景
+事件，即场景延时后执行操作
+****************************************************************/
+int userFillSceneExeBuf(uint8_t sceneId,uint8_t exeMode)
+{
+	uint8_t i;
+	int ret = 0;
+	uint8_t bufIndex = 0xff;
+	for(i = 0; i < MAX_SCENE_EXE_BUF_NUM; i ++)
+	{
+		if(sceneExeBuf[i].valid == 0)
+		{
+			bufIndex = i;
+			break;
+		}
+	}
+
+	if(bufIndex != 0xff)
+	{
+		sceneExeBuf[bufIndex].exeMode = exeMode;
+		sceneExeBuf[bufIndex].sceneId = sceneId;
+		sceneExeBuf[bufIndex].valid = 1;
+		printf("fill the scene buf index:%d,exe sceneid:%d,exe mode:%d\r\n",bufIndex,sceneId,exeMode);
+	}else{
+		printf("the scene exe buf was full\r\n");
+		ret = -1;
+	}
+	return ret;
+}
+
+
+/***********************************************************
+判断场景ID的有效性，如果有效返回0，无效返回-1
+***********************************************************/
+int userCheckSceneIdWasList(uint8_t sceneId)
+{
+	int ret = 0;
+	uint8_t tmIndex = sceneId % 10;
+	if((devNumInfo.sceneIndex[tmIndex] == INVALID_SCENE_LINKAGE_INDEX))
+	{
+		ret = -1;
+	}
+	return ret;
+}
+
+
+void zbdev_and_scene_manage_task(unsigned int arg)
+{
+	uint8_t i;
+	qcom_thread_msleep(500);
+	while(1)
+	{
+		for(i = 0; i < MAX_SCENE_EXE_BUF_NUM; i ++)
+		{
+			if(sceneExeBuf[i].valid == 1)
+			{
+				printf("exe scene index:%d\r\n",i);
+				userDealSceneForSceneId(sceneExeBuf[i].sceneId,sceneExeBuf[i].exeMode);
+				sceneExeBuf[i].valid = 0;
+				sceneExeBuf[i].sceneId = 0;
+				sceneExeBuf[i].exeMode = 0;
+			}
+		}
+		qcom_thread_msleep(50);
+		userLinkageEventLoopFunc();
+		qcom_thread_msleep(50);
+	}
+}

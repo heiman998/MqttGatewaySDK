@@ -1,0 +1,433 @@
+hm_halBeep.c: In function ‘gpio_init_func’:
+hm_halBeep.c:26: warning: implicit declaration of function ‘qca_gpio_set_pin_dir’
+hm_halBeep.c:28: warning: implicit declaration of function ‘qca_gpio_set_pin_status’
+hm_halBeep.c: In function ‘beep_wait_release’:
+hm_halBeep.c:425: warning: implicit declaration of function ‘qca_gpio_get_pin_status’
+hm_halBeep.c: In function ‘adc_lux_read_and_check’:
+hm_halBeep.c:552: warning: implicit declaration of function ‘qca_adc_init’
+hm_halBeep.c:553: warning: implicit declaration of function ‘qca_adc_read’
+hm_halBeep.c:555: warning: implicit declaration of function ‘qca_adc_close’
+hm_halBeep.c: In function ‘adc_check_power_on_or_off’:
+hm_halBeep.c:604: warning: implicit declaration of function ‘qca_save_flash_params’
+hm_halBeep.c: In function ‘beep_work_task1’:
+hm_halBeep.c:631: warning: unused variable ‘readNum’
+hm_halBeep.c: At top level:
+hm_halBeep.c:544: warning: ‘beep_action_stop_alarm’ defined but not used
+In file included from hm_httpEvent.c:25:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_httpEvent.c: In function ‘userHttpsClientSendAndRcvResponse’:
+hm_httpEvent.c:301: warning: pointer targets in passing argument 1 of ‘qca_ssl_write’ differ in signedness
+hm_httpEvent.c:310: warning: pointer targets in passing argument 1 of ‘qca_ssl_read’ differ in signedness
+hm_httpEvent.c: In function ‘userWifiDevRefreshTokenForHttps’:
+hm_httpEvent.c:425: warning: passing argument 1 of ‘sprintf’ from incompatible pointer type
+hm_httpEvent.c:427: warning: passing argument 1 of ‘strlen’ from incompatible pointer type
+hm_httpEvent.c:427: warning: passing argument 1 of ‘sprintf’ from incompatible pointer type
+hm_httpEvent.c:428: warning: passing argument 1 of ‘strcat_ext’ from incompatible pointer type
+hm_httpEvent.c:428: warning: passing argument 2 of ‘strcat_ext’ from incompatible pointer type
+hm_httpEvent.c:429: warning: passing argument 1 of ‘strlen’ from incompatible pointer type
+hm_httpEvent.c:429: warning: format ‘%s’ expects type ‘char *’, but argument 3 has type ‘char **’
+hm_httpEvent.c:430: warning: passing argument 2 of ‘userHttpsClientSendAndRcvResponse’ from incompatible pointer type
+hm_httpEvent.c:430: warning: passing argument 3 of ‘userHttpsClientSendAndRcvResponse’ from incompatible pointer type
+hm_httpEvent.c:437: warning: passing argument 1 of ‘strstr’ from incompatible pointer type
+hm_httpEvent.c:439: warning: passing argument 1 of ‘strstr’ from incompatible pointer type
+hm_httpEvent.c: In function ‘userCheckWifiUpgradeForHttps’:
+hm_httpEvent.c:688: warning: comparison between pointer and integer
+hm_httpEvent.c: In function ‘userUpdateGwNameToCloudeForHttps’:
+hm_httpEvent.c:728: warning: unused variable ‘tempVersion’
+hm_httpEvent.c: In function ‘userCheckNeedUpEchoDevInfoToBuff’:
+hm_httpEvent.c:779: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_httpEvent.c:799: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_httpEvent.c:832: warning: pointer targets in passing argument 1 of ‘strlen’ differ in signedness
+hm_httpEvent.c:938: warning: pointer targets in passing argument 1 of ‘strlen’ differ in signedness
+hm_httpEvent.c:997: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_httpEvent.c:1043: warning: pointer targets in passing argument 1 of ‘strlen’ differ in signedness
+hm_httpEvent.c:1081: warning: assignment makes pointer from integer without a cast
+hm_httpEvent.c:1118: warning: assignment makes pointer from integer without a cast
+hm_httpEvent.c:1156: warning: assignment makes pointer from integer without a cast
+hm_httpEvent.c:1194: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_httpEvent.c:766: warning: unused variable ‘temp’
+hm_httpEvent.c: In function ‘userUpgradeEchoDevForHttps’:
+hm_httpEvent.c:1217: warning: unused variable ‘jsEnd’
+hm_httpEvent.c:1216: warning: unused variable ‘jsStart’
+hm_httpEvent.c: In function ‘qca_ssl_client_func’:
+hm_httpEvent.c:1332: warning: pointer targets in passing argument 2 of ‘qcomNetworkApiIndirectionTable._qcom_dnsc_get_host_by_name’ differ in signedness
+hm_httpEvent.c:1404: warning: implicit declaration of function ‘userCheckOtaSubFirmware’
+hm_httpEvent.c:1492: warning: implicit declaration of function ‘qca_task_exit’
+hm_httpEvent.c:1309: warning: unused variable ‘state’
+hm_httpEvent.c: In function ‘userFillHttpsBufForDev’:
+hm_httpEvent.c:1513: warning: pointer targets in passing argument 1 of ‘strlen’ differ in signedness
+hm_httpEvent.c:1534: warning: large integer implicitly truncated to unsigned type
+hm_keyAndSmartLink.c: In function ‘system_info_flash_init’:
+hm_keyAndSmartLink.c:95: warning: implicit declaration of function ‘qca_load_flash_params’
+hm_keyAndSmartLink.c:103: warning: implicit declaration of function ‘qca_save_flash_params’
+hm_keyAndSmartLink.c: In function ‘hm_network_init’:
+hm_keyAndSmartLink.c:439: warning: implicit declaration of function ‘qca_task_start’
+hm_keyAndSmartLink.c:355: warning: unused variable ‘retry’
+hm_keyAndSmartLink.c: In function ‘user_check_connect_network’:
+hm_keyAndSmartLink.c:480: warning: implicit declaration of function ‘qca_task_exit’
+hm_keyAndSmartLink.c: At top level:
+hm_keyAndSmartLink.c:28: warning: ‘deshake_timer’ defined but not used
+In file included from hm_net_data_manage.c:11:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_net_data_manage.c: In function ‘user_aes_decode’:
+hm_net_data_manage.c:100: warning: pointer targets in passing argument 1 of ‘base64_decode’ differ in signedness
+hm_net_data_manage.c:100: warning: pointer targets in passing argument 2 of ‘base64_decode’ differ in signedness
+hm_net_data_manage.c: In function ‘userPkSendBuffer’:
+hm_net_data_manage.c:148: warning: pointer targets in passing argument 1 of ‘user_aes_encode’ differ in signedness
+hm_net_data_manage.c:148: warning: pointer targets in passing argument 3 of ‘user_aes_encode’ differ in signedness
+hm_net_data_manage.c: In function ‘userCreatNodeBasicListInfo’:
+hm_net_data_manage.c:272: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_net_data_manage.c: In function ‘userCreateNodeJsPl’:
+hm_net_data_manage.c:858: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_net_data_manage.c: In function ‘hmiotsDoRecvGetMibCallback’:
+hm_net_data_manage.c:944: warning: pointer targets in passing argument 1 of ‘strlen’ differ in signedness
+hm_net_data_manage.c:952: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_net_data_manage.c:959: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_net_data_manage.c:915: warning: unused variable ‘jsArray’
+hm_net_data_manage.c: In function ‘userDoNetAppGetNodeState’:
+hm_net_data_manage.c:1110: warning: unused variable ‘payload’
+hm_net_data_manage.c:1105: warning: unused variable ‘json_sid’
+hm_net_data_manage.c:1105: warning: unused variable ‘json_teid’
+hm_net_data_manage.c: In function ‘hmiotsDoRecvSetMibCallback’:
+hm_net_data_manage.c:1232: warning: pointer targets in passing argument 1 of ‘Atof’ differ in signedness
+hm_net_data_manage.c:1242: warning: implicit declaration of function ‘userFlashWriteSysInfoFunc’
+hm_net_data_manage.c:1941: warning: pointer targets in passing argument 1 of ‘Atof’ differ in signedness
+hm_net_data_manage.c:1950: warning: pointer targets in passing argument 1 of ‘Atof’ differ in signedness
+hm_net_data_manage.c:1970: warning: pointer targets in passing argument 1 of ‘Atof’ differ in signedness
+hm_net_data_manage.c:1973: warning: pointer targets in passing argument 1 of ‘Atof’ differ in signedness
+hm_net_data_manage.c:1988: warning: pointer targets in passing argument 1 of ‘Atof’ differ in signedness
+hm_net_data_manage.c:1991: warning: pointer targets in passing argument 1 of ‘Atof’ differ in signedness
+hm_net_data_manage.c: In function ‘userDoNetAppChangeNodeState’:
+hm_net_data_manage.c:3719: warning: unused variable ‘payload’
+hm_net_data_manage.c:3719: warning: unused variable ‘sendData’
+hm_net_data_manage.c:3717: warning: unused variable ‘i’
+hm_net_data_manage.c:3717: warning: unused variable ‘oidCount’
+hm_net_data_manage.c:3716: warning: unused variable ‘jstempOid’
+hm_net_data_manage.c:3716: warning: unused variable ‘json_rsp_pl’
+hm_net_data_manage.c: In function ‘userIotsDeviceDoRecv’:
+hm_net_data_manage.c:3925: warning: pointer targets in passing argument 1 of ‘json_parse_with_opts’ differ in signedness
+hm_net_data_manage.c:3959: warning: pointer targets in passing argument 1 of ‘sscanf_ext’ differ in signedness
+hm_net_data_manage.c: In function ‘userDealNetDataFunc’:
+hm_net_data_manage.c:4060: warning: pointer targets in passing argument 1 of ‘userIotsDeviceDoRecv’ differ in signedness
+hm_net_data_manage.c:4086: warning: implicit declaration of function ‘XlinkSendTcpPipe2’
+hm_net_data_manage.c:4089: warning: implicit declaration of function ‘XlinkSendUdpPipe’
+hm_net_data_manage.c:4110: warning: implicit declaration of function ‘XlinkSendTcpPipe’
+hm_net_data_manage.c: In function ‘hmiots_do_zigbee_event’:
+hm_net_data_manage.c:4235: warning: pointer targets in passing argument 4 of ‘user_aes_encode’ differ in signedness
+hm_net_data_manage.c:4236: warning: pointer targets in passing argument 1 of ‘strlen’ differ in signedness
+hm_net_data_manage.c:4244: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_net_data_manage.c:4149: warning: unused variable ‘version’
+hm_net_data_manage.c:4149: warning: unused variable ‘versionLen’
+hm_net_data_manage.c:4141: warning: unused variable ‘payload’
+hm_net_data_manage.c:4140: warning: unused variable ‘strData’
+hm_net_data_manage.c:4138: warning: unused variable ‘jsHttpSendBuf’
+In file included from hm_reportDevToCloud.c:9:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_reportDevToCloud.c: In function ‘userCreateTHPStaObject’:
+hm_reportDevToCloud.c:1646: warning: unused variable ‘strZBMac’
+hm_reportDevToCloud.c: In function ‘userCreateIasStaObject’:
+hm_reportDevToCloud.c:1782: warning: unused variable ‘strZBMac’
+hm_reportDevToCloud.c: In function ‘userCreateAceStaObject’:
+hm_reportDevToCloud.c:1834: warning: unused variable ‘strZBMac’
+hm_reportDevToCloud.c: In function ‘writeGWStateRecordToCloud’:
+hm_reportDevToCloud.c:1893: warning: passing argument 3 of ‘json_add_item_to_object’ makes pointer from integer without a cast
+hm_reportDevToCloud.c:1874: warning: unused variable ‘reportValid’
+hm_reportDevToCloud.c:1872: warning: unused variable ‘jsSetting’
+hm_reportDevToCloud.c:1872: warning: unused variable ‘message’
+hm_reportDevToCloud.c: In function ‘writeNodeStateRecordToCloud’:
+hm_reportDevToCloud.c:1924: warning: unused variable ‘jsSetting’
+hm_reportDevToCloud.c:1924: warning: unused variable ‘message’
+hm_reportDevToCloud.c: In function ‘writeUserControlDevStateToCloud’:
+hm_reportDevToCloud.c:2058: warning: unused variable ‘reportValid’
+hm_reportDevToCloud.c: In function ‘writeUserControlSceneStateToCloud’:
+hm_reportDevToCloud.c:2227: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_reportDevToCloud.c:2197: warning: unused variable ‘reportValid’
+hm_reportDevToCloud.c:2196: warning: unused variable ‘jsSe’
+hm_reportDevToCloud.c: In function ‘writeNodeStateAlarnToCloud’:
+hm_reportDevToCloud.c:2349: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_reportDevToCloud.c:2355: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_reportDevToCloud.c:2318: warning: unused variable ‘reportValid’
+hm_reportDevToCloud.c: In function ‘userUpdateDevDataToCloud’:
+hm_reportDevToCloud.c:2790: warning: implicit declaration of function ‘Xlink_UpdateDataPoint’
+hm_reportDevToCloud.c: In function ‘userReadHomeArmForDevList’:
+hm_reportDevToCloud.c:2811: warning: unused variable ‘ret’
+hm_reportDevToCloud.c: In function ‘userReadArmStateAndTimerFunc’:
+hm_reportDevToCloud.c:2843: warning: unused variable ‘ret’
+hm_reportDevToCloud.c:2842: warning: unused variable ‘i’
+In file included from hm_timerEvent.c:4:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_timerEvent.c: In function ‘userInitAllTimerEvent’:
+hm_timerEvent.c:231: warning: unused variable ‘tempFlashData’
+hm_timerEvent.c: In function ‘userDealTimerAction’:
+hm_timerEvent.c:354: warning: implicit declaration of function ‘hmSetAllSensorDisarm’
+hm_timerEvent.c:368: warning: implicit declaration of function ‘hmSetAllSensorHomeArm’
+hm_timerEvent.c:382: warning: implicit declaration of function ‘hmSetAllSensorArm’
+hm_timerEvent.c:402: warning: implicit declaration of function ‘userFlashWriteSysInfoFunc’
+hm_timerEvent.c:430: warning: implicit declaration of function ‘userFillUartCmdForOnOff’
+hm_timerEvent.c:439: warning: implicit declaration of function ‘userFillUartCmdForLevel’
+hm_timerEvent.c:447: warning: left-hand operand of comma expression has no effect
+hm_timerEvent.c:447: warning: value computed is not used
+hm_timerEvent.c:448: warning: left-hand operand of comma expression has no effect
+hm_timerEvent.c:448: warning: value computed is not used
+hm_timerEvent.c:449: warning: left-hand operand of comma expression has no effect
+hm_timerEvent.c:449: warning: value computed is not used
+hm_timerEvent.c:450: warning: implicit declaration of function ‘userFillUartCmdForColorControl’
+hm_timerEvent.c:556: warning: implicit declaration of function ‘userAppControlWDFunc’
+hm_timerEvent.c:624: warning: implicit declaration of function ‘userFillUartCmdForBrightness’
+hm_timerEvent.c:666: warning: implicit declaration of function ‘userFillUartCmdForColorTemperature’
+hm_timerEvent.c:713: warning: implicit declaration of function ‘userFillSceneExeBuf’
+hm_timerEvent.c: In function ‘userCheckDevOnOffLineByTimerEvent’:
+hm_timerEvent.c:859: warning: implicit declaration of function ‘userFillUartCmdForReadAttr’
+hm_timerEvent.c:862: warning: implicit declaration of function ‘setNodeOnlineUpdateDetectedEvent’
+hm_timerEvent.c: In function ‘timer_work_task’:
+hm_timerEvent.c:1025: warning: implicit declaration of function ‘userSaveAllInfoToFlash’
+hm_timerEvent.c:1054: warning: implicit declaration of function ‘userDealWriteAttrCmdRspEvent’
+hmType.c:148:37: warning: multi-character character constant
+hmType.c: In function ‘Atof’:
+hmType.c:148: warning: comparison is always false due to limited range of data type
+hmType.c: In function ‘years’:
+hmType.c:189: warning: suggest parentheses around && within ||
+hmType.c: In function ‘month’:
+hmType.c:233: warning: suggest parentheses around && within ||
+hmType.c: In function ‘userChangeSTimeToYears’:
+hmType.c:257: warning: unused variable ‘y’
+hmType.c: In function ‘get_id_from_OID’:
+hmType.c:291: warning: implicit declaration of function ‘strlen’
+hmType.c:291: warning: incompatible implicit declaration of built-in function ‘strlen’
+hmType.c:296: warning: implicit declaration of function ‘atoi’
+hmType.c: In function ‘get_last_id_from_OID’:
+hmType.c:312: warning: incompatible implicit declaration of built-in function ‘strlen’
+hmType.c: In function ‘get_dot_num_from_OID’:
+hmType.c:331: warning: incompatible implicit declaration of built-in function ‘strlen’
+In file included from hm_uartCmdExecute.c:3:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_uartCmdExecute.c: In function ‘userUartSendWithDebugFunc’:
+hm_uartCmdExecute.c:84: warning: implicit declaration of function ‘qca_uart_send’
+hm_uartCmdExecute.c: In function ‘fillUartCmdMonitor’:
+hm_uartCmdExecute.c:131: warning: implicit declaration of function ‘qcom_time_us’
+hm_uartCmdExecute.c: In function ‘userFillUartCmdForReadAttr’:
+hm_uartCmdExecute.c:629: warning: unused variable ‘i’
+hm_uartCmdExecute.c: In function ‘uartRcvDataDeal’:
+hm_uartCmdExecute.c:1177: warning: implicit declaration of function ‘setNodeBatteryDetectedEvent’
+hm_uartCmdExecute.c:851: warning: unused variable ‘i’
+hm_uartCmdExecute.c:850: warning: unused variable ‘devIndex’
+hm_uartCmdExecute.c:849: warning: unused variable ‘tempFlashData’
+hm_uartCmdExecute.c:839: warning: unused variable ‘subType’
+hm_uartCmdExecute.c:836: warning: unused variable ‘armMode’
+hm_uartCmdExecute.c: In function ‘hm_uart_reslove_packet’:
+hm_uartCmdExecute.c:2185: warning: implicit declaration of function ‘qca_uart_get_buf_full_status’
+hm_uartCmdExecute.c:2190: warning: label ‘TODO’ defined but not used
+hm_uartCmdExecute.c: In function ‘hm_uart_work_task’:
+hm_uartCmdExecute.c:2241: warning: implicit declaration of function ‘qca_gpio_set_pin_status’
+hm_uartCmdExecute.c:2249: warning: implicit declaration of function ‘qca_uart_get_one_recv_packet’
+hm_uartCmdExecute.c:2308: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_uartCmdExecute.c:2317: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_uartCmdExecute.c:2238: warning: unused variable ‘temp’
+hm_uartCmdExecute.c:2237: warning: unused variable ‘temp1’
+hm_uartCmdExecute.c: In function ‘uart_work_task_init’:
+hm_uartCmdExecute.c:2494: warning: implicit declaration of function ‘qca_uart_task_start’
+hm_uartCmdExecute.c:2498: warning: implicit declaration of function ‘qca_task_start’
+hm_uartCmdExecute.c: At top level:
+hm_uartCmdExecute.c:189: warning: ‘userFindFreeRxBufIndex’ defined but not used
+hm_userAes128.c: In function ‘EncryptBuf’:
+hm_userAes128.c:425: warning: pointer targets in passing argument 1 of ‘ExpandKey’ differ in signedness
+hm_userAes128.c:435: warning: pointer targets in passing argument 1 of ‘Encrypt’ differ in signedness
+hm_userAes128.c:435: warning: pointer targets in passing argument 3 of ‘Encrypt’ differ in signedness
+hm_userAes128.c:456: warning: pointer targets in passing argument 1 of ‘Encrypt’ differ in signedness
+hm_userAes128.c:456: warning: pointer targets in passing argument 3 of ‘Encrypt’ differ in signedness
+hm_userAes128.c: In function ‘DecryptBuf’:
+hm_userAes128.c:475: warning: pointer targets in passing argument 1 of ‘ExpandKey’ differ in signedness
+hm_userAes128.c:484: warning: pointer targets in passing argument 1 of ‘Decrypt’ differ in signedness
+hm_userAes128.c:484: warning: pointer targets in passing argument 3 of ‘Decrypt’ differ in signedness
+hm_userAes128.c: In function ‘user_make_aes_key’:
+hm_userAes128.c:535: warning: unused variable ‘rand’
+In file included from hm_userFlashAction.c:3:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_userFlashAction.c: In function ‘findFreeDevIndex’:
+hm_userFlashAction.c:29: warning: implicit declaration of function ‘qcom_time_us’
+hm_userFlashAction.c: In function ‘userInitGwArmForTimerEvent’:
+hm_userFlashAction.c:74: warning: unused variable ‘i’
+hm_userFlashAction.c: In function ‘userUpdateGwArmForTimerEvent’:
+hm_userFlashAction.c:140: warning: unused variable ‘i’
+hm_userFlashAction.c: In function ‘initOtaStationInfo’:
+hm_userFlashAction.c:899: warning: implicit declaration of function ‘qca_load_flash_params’
+hm_userFlashAction.c:909: warning: implicit declaration of function ‘qca_save_flash_params’
+hm_userFlashAction.c: In function ‘getValidDevNameAndDevType’:
+hm_userFlashAction.c:933: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_userFlashAction.c:950: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_userFlashAction.c:952: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_userFlashAction.c:956: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_userFlashAction.c:959: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_userFlashAction.c:970: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_userFlashAction.c:979: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+hm_userFlashAction.c:1017: warning: implicit declaration of function ‘hmzColorXYToRgb’
+hm_userFlashAction.c: In function ‘userFlashInitToRam’:
+hm_userFlashAction.c:1478: warning: left-hand operand of comma expression has no effect
+hm_userFlashAction.c:1478: warning: left-hand operand of comma expression has no effect
+hm_userFlashAction.c:1474: warning: unused variable ‘timeMode’
+hm_userFlashAction.c:1473: warning: unused variable ‘timers’
+hm_userFlashAction.c:1468: warning: unused variable ‘flashValidxNum’
+hm_userFlashAction.c: In function ‘userDeleteDevFromSceneAndLinkage’:
+hm_userFlashAction.c:1813: warning: unused variable ‘sceneNum’
+hm_userFlashAction.c:1810: warning: unused variable ‘outputNum’
+hm_userFlashAction.c:1809: warning: unused variable ‘pni_temp’
+hm_wifiOta.c: In function ‘userWriteSubFirmwareToFlash’:
+hm_wifiOta.c:53: warning: implicit declaration of function ‘qca_save_flash_params’
+hm_wifiOta.c: In function ‘userFinishSubFirmwareOta’:
+hm_wifiOta.c:65: warning: pointer targets in passing argument 1 of ‘qcomSecurityApiIndirectionTable._qcom_sec_md5_final’ differ in signedness
+hm_wifiOta.c: In function ‘ota_task’:
+hm_wifiOta.c:458: warning: format ‘%s’ expects type ‘char *’, but argument 2 has type ‘char **’
+hm_wifiOta.c:459: warning: passing argument 1 of ‘userGetSubFirmwarmFromHttp’ from incompatible pointer type
+hm_wifiOta.c:423: warning: unused variable ‘parm’
+In file included from hm_zbDevAndSceneManage.c:4:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_zbDevAndSceneManage.c: In function ‘userCheckDevLinkWdWasTrigger’:
+hm_zbDevAndSceneManage.c:102: warning: implicit declaration of function ‘userAppControlWDFunc’
+hm_zbDevAndSceneManage.c: In function ‘userDealLinkageForOutputBuf’:
+hm_zbDevAndSceneManage.c:309: warning: implicit declaration of function ‘hmSetAllSensorDisarm’
+hm_zbDevAndSceneManage.c:322: warning: implicit declaration of function ‘hmSetAllSensorHomeArm’
+hm_zbDevAndSceneManage.c:335: warning: implicit declaration of function ‘hmSetAllSensorArm’
+hm_zbDevAndSceneManage.c:354: warning: implicit declaration of function ‘userFlashWriteSysInfoFunc’
+hm_zbDevAndSceneManage.c:377: warning: implicit declaration of function ‘userFillUartCmdForOnOff’
+hm_zbDevAndSceneManage.c:387: warning: left-hand operand of comma expression has no effect
+hm_zbDevAndSceneManage.c:387: warning: value computed is not used
+hm_zbDevAndSceneManage.c:388: warning: left-hand operand of comma expression has no effect
+hm_zbDevAndSceneManage.c:388: warning: value computed is not used
+hm_zbDevAndSceneManage.c:389: warning: left-hand operand of comma expression has no effect
+hm_zbDevAndSceneManage.c:389: warning: value computed is not used
+hm_zbDevAndSceneManage.c:390: warning: implicit declaration of function ‘userFillUartCmdForColorControl’
+hm_zbDevAndSceneManage.c:399: warning: implicit declaration of function ‘userFillUartCmdForLevel’
+hm_zbDevAndSceneManage.c:515: warning: implicit declaration of function ‘userFillUartCmdForBrightness’
+hm_zbDevAndSceneManage.c:557: warning: implicit declaration of function ‘userFillUartCmdForColorTemperature’
+hm_zbDevAndSceneManage.c:294: warning: unused variable ‘outputNum’
+hm_zbDevAndSceneManage.c:293: warning: unused variable ‘needSaveNumFlag’
+hm_zbDevAndSceneManage.c:291: warning: unused variable ‘sceneFlashSave’
+hm_zbDevAndSceneManage.c:289: warning: unused variable ‘pgw_info’
+hm_zbDevAndSceneManage.c:288: warning: unused variable ‘i’
+hm_zbDevAndSceneManage.c: In function ‘userReadLinkageListFunc’:
+hm_zbDevAndSceneManage.c:2140: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_zbDevAndSceneManage.c:2120: warning: unused variable ‘pni_temp’
+hm_zbDevAndSceneManage.c:2118: warning: unused variable ‘js_in’
+hm_zbDevAndSceneManage.c:2116: warning: unused variable ‘ret’
+hm_zbDevAndSceneManage.c: In function ‘userCreatLinkageDevActionData’:
+hm_zbDevAndSceneManage.c:2506: warning: unused variable ‘js_child’
+hm_zbDevAndSceneManage.c: In function ‘userCreatLinkageCheckBuf’:
+hm_zbDevAndSceneManage.c:2915: warning: statement with no effect
+hm_zbDevAndSceneManage.c:2925: warning: statement with no effect
+hm_zbDevAndSceneManage.c:2974: warning: statement with no effect
+hm_zbDevAndSceneManage.c:3203: warning: statement with no effect
+hm_zbDevAndSceneManage.c:3315: warning: statement with no effect
+hm_zbDevAndSceneManage.c:2909: warning: unused variable ‘setTimeFlag’
+hm_zbDevAndSceneManage.c: In function ‘userCreatLinkageInputData’:
+hm_zbDevAndSceneManage.c:3355: warning: statement with no effect
+hm_zbDevAndSceneManage.c:3365: warning: statement with no effect
+hm_zbDevAndSceneManage.c:3414: warning: statement with no effect
+hm_zbDevAndSceneManage.c:3644: warning: statement with no effect
+hm_zbDevAndSceneManage.c:3709: warning: statement with no effect
+hm_zbDevAndSceneManage.c:3348: warning: unused variable ‘setTimeFlag’
+hm_zbDevAndSceneManage.c: In function ‘userAddLinkageFunc’:
+hm_zbDevAndSceneManage.c:3742: warning: unused variable ‘js_temp’
+hm_zbDevAndSceneManage.c:3742: warning: unused variable ‘js_se’
+hm_zbDevAndSceneManage.c:3742: warning: unused variable ‘js_child’
+hm_zbDevAndSceneManage.c: In function ‘userDealSceneForSceneId’:
+hm_zbDevAndSceneManage.c:4002: warning: left-hand operand of comma expression has no effect
+hm_zbDevAndSceneManage.c:4002: warning: value computed is not used
+hm_zbDevAndSceneManage.c:4003: warning: left-hand operand of comma expression has no effect
+hm_zbDevAndSceneManage.c:4003: warning: value computed is not used
+hm_zbDevAndSceneManage.c:4004: warning: left-hand operand of comma expression has no effect
+hm_zbDevAndSceneManage.c:4004: warning: value computed is not used
+hm_zbDevAndSceneManage.c: In function ‘userCreatSceneDevActionData’:
+hm_zbDevAndSceneManage.c:4330: warning: unused variable ‘js_child’
+hm_zbDevAndSceneManage.c: In function ‘userAddSceneFunc’:
+hm_zbDevAndSceneManage.c:4679: warning: unused variable ‘js_se’
+hm_zbDevAndSceneManage.c: In function ‘userReadSceneListFunc’:
+hm_zbDevAndSceneManage.c:4817: warning: pointer targets in passing argument 1 of ‘json_create_string’ differ in signedness
+hm_zbDevAndSceneManage.c:4805: warning: unused variable ‘pni_temp’
+In file included from hm_zcOtaSource.c:4:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_zcOtaSource.c: In function ‘zigbeeModeReset’:
+hm_zcOtaSource.c:55: warning: implicit declaration of function ‘qca_gpio_set_pin_status’
+hm_zcOtaSource.c: In function ‘uartSendXmodemRecord’:
+hm_zcOtaSource.c:84: warning: implicit declaration of function ‘qca_uart_send’
+hm_zcOtaSource.c: In function ‘userXmodemTransport’:
+hm_zcOtaSource.c:149: warning: implicit declaration of function ‘qca_load_flash_params’
+In file included from hm_zigbeeStateDeal.c:4:
+hm_zigbeeInfohand.h:353:1: warning: "NODE_INFO_TYPE_AIR_QUALITY" redefined
+hm_zigbeeInfohand.h:320:1: warning: this is the location of the previous definition
+hm_zigbeeStateDeal.c: In function ‘setIasAlarmDetectedEvent’:
+hm_zigbeeStateDeal.c:465: warning: implicit declaration of function ‘writeNodeStateAlarnToCloud’
+hm_zigbeeStateDeal.c: In function ‘setNodeBatteryDetectedEvent’:
+hm_zigbeeStateDeal.c:859: warning: statement with no effect
+hm_zigbeeStateDeal.c: In function ‘setNodePowerKWHDetectedEvent’:
+hm_zigbeeStateDeal.c:1063: warning: format ‘%d’ expects type ‘int’, but argument 2 has type ‘uint64_t’
+main.c:985:5: warning: no newline at end of file
+main.c: In function ‘yzyUpdataDeviceSoftware’:
+main.c:146: warning: format ‘%d’ expects type ‘int’, but argument 2 has type ‘char *’
+main.c:146: warning: format ‘%d’ expects type ‘int’, but argument 3 has type ‘char *’
+main.c:145: warning: unused variable ‘i’
+main.c: In function ‘xlink_uip_udp_send’:
+main.c:180: warning: format ‘%x’ expects type ‘unsigned int’, but argument 5 has type ‘long unsigned int’
+main.c: In function ‘ConnectTCPSever’:
+main.c:245: warning: implicit declaration of function ‘qca_inet_addr’
+main.c: In function ‘tcp_init’:
+main.c:290: warning: pointer targets in passing argument 2 of ‘qcomNetworkApiIndirectionTable._qcom_dnsc_get_host_by_name’ differ in signedness
+main.c:304: warning: implicit declaration of function ‘xlink_demo_setServerStatus’
+main.c: In function ‘qca_tcp_client_handle’:
+main.c:418: warning: passing argument 1 of ‘memset’ discards qualifiers from pointer target type
+main.c:437: warning: implicit declaration of function ‘XlinkPushData’
+main.c:463: warning: format ‘%x’ expects type ‘unsigned int’, but argument 5 has type ‘long unsigned int’
+main.c:472: warning: implicit declaration of function ‘xlink_demo_process_udp_data’
+main.c:391: warning: unused variable ‘ip_byte’
+main.c:376: warning: unused variable ‘sendBytes’
+main.c: In function ‘pipe1_call’:
+main.c:486: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+main.c:486: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+main.c:511: warning: pointer targets in passing argument 1 of ‘cp_to_rcv_buf’ differ in signedness
+main.c:521: warning: pointer targets in passing argument 1 of ‘cp_to_rcv_buf’ differ in signedness
+main.c: In function ‘udp_pipe_call’:
+main.c:536: warning: pointer targets in passing argument 1 of ‘strstr’ differ in signedness
+main.c:561: warning: pointer targets in passing argument 1 of ‘cp_to_rcv_buf’ differ in signedness
+main.c:571: warning: pointer targets in passing argument 1 of ‘cp_to_rcv_buf’ differ in signedness
+main.c: In function ‘app_status’:
+main.c:596: warning: implicit declaration of function ‘XlinkInitData’
+main.c:619: warning: pointer targets in passing argument 1 of ‘XlinkGetAuthCode’ differ in signedness
+main.c:621: warning: implicit declaration of function ‘XlinkSystemGetDeviceID’
+main.c: At top level:
+main.c:628: warning: conflicting types for ‘xlink_demo_setServerStatus’
+main.c:304: warning: previous implicit declaration of ‘xlink_demo_setServerStatus’ was here
+main.c:637: warning: conflicting types for ‘xlink_demo_process_udp_data’
+main.c:472: warning: previous implicit declaration of ‘xlink_demo_process_udp_data’ was here
+main.c: In function ‘send_udp_to_remote’:
+main.c:659: warning: format ‘%x’ expects type ‘unsigned int’, but argument 5 has type ‘long unsigned int’
+main.c: In function ‘xlink_demo_work_init’:
+main.c:767: warning: assignment discards qualifiers from pointer target type
+main.c:773: warning: implicit declaration of function ‘XlinkSystemInit’
+main.c:775: warning: implicit declaration of function ‘XlinkGetServerTime’
+main.c: In function ‘xlink_demo_loop’:
+main.c:799: warning: implicit declaration of function ‘XlinkSystemLoop’
+main.c:811: warning: implicit declaration of function ‘XlinkGetSystemTime’
+main.c: In function ‘xlink_loop_thread_process’:
+main.c:900: warning: implicit declaration of function ‘XlinkProcessTCPData’
+main.c:907: warning: implicit declaration of function ‘xlink_tcp_send_upgrade’
+main.c: In function ‘main’:
+main.c:969: warning: implicit declaration of function ‘qca_task_start’
+main.c:977: warning: implicit declaration of function ‘mqtt_handle1’
+xt-ar: creating /mnt/hgfs/vmshare/MQ_ltm3210-v01/target/lib/libiot_demo.a
+/mnt/hgfs/vmshare/MQ_ltm3210-v01/target/lib/libiot_demo.a(main.o): In function `main':
+/mnt/hgfs/vmshare/MQ_ltm3210-v01/target/user/main.c:974: undefined reference to `mqtt_handle1'
+/mnt/hgfs/vmshare/MQ_ltm3210-v01/target/lib/libiot_demo.a(main.o):(.lit4.main+0x28): undefined reference to `mqtt_handle1'
+make: *** [/mnt/hgfs/vmshare/MQ_ltm3210-v01/target/image/iot_demo.out] Error 2
+Open raw_flashimage_AR401X_REV6_IOT_hostless_unidev_singleband.bin Error：No such file or directory
+Open ota_image_AR401X_REV6_IOT_hostless_unidev_singleband.bin Error：No such file or directory
+Open raw_flashimage_AR401X_REV6_IOT_hostless_unidev_singleband.bin Error：No such file or directory
+md5sum: ltm3210_user.bin: No such file or directory
+mv: cannot stat `ota_image_AR401X_REV6_IOT_hostless_unidev_singleband.bin': No such file or directory
+cp: cannot stat `ltm3210_user.bin': No such file or directory

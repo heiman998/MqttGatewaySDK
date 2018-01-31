@@ -1,0 +1,493 @@
+# xt-gdb init for Ruby(HAPS62) hw platform @[2014-08-11 14:23:37], Eason.
+# 2014-10-20
+# 2014-10-31
+# 2014-11-05
+# 2015-07-03
+# 2016-07-21
+# 2017-01-06
+# copy script to ../../wlanfw.ioe and load it in that directory.
+#  hostless mode run
+#  first modify target remote ip address to your ocd  running machine
+#  then source script in xt-gdb and then 
+#
+#  hw_hostless
+#  runme_hostless
+#  or
+#  sdk_flash
+#  reset
+#  hw_hostless_w_flash
+#  runme_hostless 
+
+# please change to your ip address
+target remote YUNJIEZ.ap.qualcomm.com:20000
+reset
+define null_ptr_dbg
+    set hang_memctlr_isr_error=0
+    hbreak *0x900672
+    cont
+    stepi
+end
+
+define load_rom_32
+    set *(int *)0x5000=0x0
+    #restore .output/AR6002/hw7.6.1mb/bin/fw.rom.bin binary 0x900000
+    restore ./support/bddata/boardData_2_1_SP242.bin binary 0x4de000
+    restore ./patch/AR6006/v6/data.patch.hw7_6.bin binary 0x4dded4
+
+    sym .output/AR6002/hw7.6.1mb/image/sw.rom.out
+    set confirm yes
+    reset
+end
+
+define load_sdk_shell_32
+    reset
+    set_ram_32
+    load .output/AR6002/hw7.6.1mb/image/iot_demo.out
+    add-symbol-file .output/AR6002/hw7.6.1mb/image/iot_demo.out 0xa04c00
+end
+
+define load_sdk_proxy_32
+    reset
+    set_ram_32
+    restore .output/AR6002/hw7.6.1mb/image/sdk_proxy.out 0xa04400
+    add-symbol-file .output/AR6002/hw7.6.1mb/image/sdk_proxy.out 0xa04400
+end
+define load_host_proxy
+	restore .output/AR6002/hw7.6.1mb/image/hostproxy.out
+	add-symbol-file .output/AR6002/hw7.6.1mb/image/hostproxy.out 0xA04400
+ 	restore ./patch/AR6006/v5/data.patch.hw7_6.bin binary 0x4DDf88
+end
+
+define load_sdk_flash_32
+    reset
+    set_ram_32
+    load .output/AR6002/hw7.6.1mb/image/sdk_flash.out
+    add-symbol-file .output/AR6002/hw7.6.1mb/image/sdk_flash.out 0xa04c00
+end
+
+define load_epping
+    restor .output/AR6002/hw7.6.1mb/image/endpointping.out 
+    add-symbol-file .output/AR6002/hw7.6.1mb/image/endpointping.out 0xa02000 
+end
+
+define set_ram_32
+    set *(int *)0x4020 &= ~1
+    set *(int *)0x4028 &= ~1
+end
+
+define set_buf
+	set ath_txbuf = 8
+	set ath_rxbuf = 12
+	set ath_mgmtbuf = 12
+end
+
+define start_rom_32
+    reset
+    set_ram_32
+    delete breakpoints
+    set *(int * )0x180c0 |= 0x8d
+    #echo  'load from FLASH'
+    #set *(int * )0x180c0 |= 0x0d
+    
+    set *(int *)0x4208b4 = 0x01
+    set *(int *)0x4208b8 = 0x12345678
+    set *(int *)0x42081c = 0xa04c00 
+    #set *(int *)0x420810 |= 0x200 
+    
+    echo ===start app===
+end
+
+
+define start_rom_32_flash
+    reset
+    set_ram_32
+    delete breakpoints
+    #echo  'load from FLASH'
+    set *(int * )0x180c0 |= 0x0d
+    
+    set *(int *)0x4208b4 = 0x01
+    set *(int *)0x4208b8 = 0x12345678
+    set *(int *)0x42081c = 0xa04c00 
+    #set *(int *)0x420810 |= 0x200 
+    
+    echo ===start app===
+end
+
+define start_rom_32_hosted
+    reset
+    set_ram_32
+    delete breakpoints
+    set *(int * )0x180c0 |= 0x8d
+    set *(int *)0x4208b4 = 0x01
+    set *(int *)0x4208b8 = 0x12345678
+    set *(int *)0x42081c = 0xa02800 
+
+    echo ===start app===
+end
+
+define start_rom_32_usb
+   reset
+   set_ram_32
+   set *(int * )0x180c0 |= 0x8c
+   set *(int *)0x4208b4 = 0x01
+   set *(int *)0x4208b8 = 0x12345678
+   set *(int *)0x42081c = 0xa02000
+
+   echo ===start usb===
+end
+
+
+define start_rom_flash
+    reset
+    set_ram_32
+    delete breakpoints
+    set *(int * )0x180c0 |= 0x8d
+    set *(int *)0x4208b4 = 0x01
+    set *(int *)0x4208b8 = 0x12345678
+    set *(int *)0x42081c =0xa04800
+
+    echo ===start flashing===
+end
+
+
+# Disable WatchDog Timer on WLAN
+define nowdt
+	set *((int *)0x180c0) |= 4
+end
+
+# Disable system sleep on WLAN
+define nosleep
+	set *((int *)0x180c0) |= 8
+end
+
+define hw_hostless
+	
+	load_rom_32
+	load_sdk_shell_32
+	
+	nowdt
+    nosleep
+
+    start_rom_32
+end
+
+define hw_hostless_w_flash
+	load_rom_32
+	# load_sdk_proxy_32
+
+	nowdt
+	nosleep
+	
+	start_rom_32_flash
+end
+define hw_flash
+    load_rom_32
+    load_sdk_flash_32
+
+    nowdt
+    nosleep
+
+    start_rom_flash
+end
+define set_host_interest_area
+    set $host_interest=((struct host_interest_s *)0x00420800)
+    set $host_interest->hi_board_data=0x4de000
+    set $host_interest->hi_board_data_initialized=1
+    set $host_interest->hi_end_RAM_reserve_sz=1024
+    set $host_interest->hi_option_flag |= (1 << 9)
+    set $host_interest->hi_option_flag |= (1 << 0x0c)
+    set $host_interest->hi_dset_list_head = 0x4dded4
+    # Enable MCC
+    set $host_interest->hi_option_flag2 |= 0x80000000
+end
+
+define runme_hostless
+	del br
+    set confirm yes
+    set *((int *)0x5000) = 0
+    hb athos_main
+    c
+    #set AR6k_hostless_override=0x10
+   #b _nvram_process
+
+   #b ar6000_hw_eeprom.c:120
+    b _qcom_host_less_boot_config
+    c
+    set_host_interest_area
+
+    set currentDeviceId=1
+    set gNumDev=2
+    set_buf
+
+end
+
+
+define hw_hosted
+
+	load_rom_32
+	load_host_proxy
+
+	nowdt
+	nosleep
+
+	start_rom_32_hosted
+end
+
+define runme_hosted
+	del br
+	set confirm yes
+	set *((int *)0x5000) = 0
+        hb athos_main
+	c
+	set nvram_fns._nvram_autoload=_fpga_nvram_autoload
+        #b AR6K_contact_host
+	b hostproxy_app_start
+	c
+	set real_app_start=&wlan_main
+		
+end
+
+define set_htc_rx_res
+       set g_HTCPipeRxResource[0] = 12
+       set g_HTCPipeRxResource[1] = 4
+       set g_HTCPipeRxResource[2] = 4
+       set g_HTCPipeRxResource[3] = 4
+       set g_HTCPipeRxResource[4] = 4
+end
+
+define hw_usb
+       load_rom_32
+       load_epping
+
+       nowdt
+       nosleep
+
+       start_rom_32_usb
+end
+
+define runme_usb
+       #del br
+       #set confirm yes
+       #set *((int*)0x5000) = 0
+       #set _usbConfDesc[23] = 0x01
+       #set_htc_rx_res
+       hb athos_main.c:1452
+       c
+       set AR6K_boot_info.interconnect_type=5
+       set _usbConfDesc[23] = 0x01
+       set_htc_rx_res 
+       c
+       #hb AR6K_contact_host
+       #set usbhwapi._usb_setupspeedconfig = patch_usb_setupspeedconfig
+end
+
+define hw_art
+       load_rom_32
+       
+       nowdt
+       nosleep
+  
+       start_rom_32_usb
+end
+
+define runme_art
+       del br
+       set confirm yes
+       set *((int*)0x5000) = 0
+       set_htc_rx_res
+       hb athos_main
+       c
+       set AR6k_hostless_override=0x10000
+       c
+end
+
+define set_nvram_state
+    set nvram_state._nvram_config.si_config_value = 0x40 | 0x80
+    set nvram_state._nvram_config.si_pin_num[0]   = 34
+    set nvram_state._nvram_config.si_pin_num[1]   = 35
+    set nvram_state._nvram_config.si_pin_num[2]   = 36
+    set nvram_state._nvram_config.si_pin_num[3]   = 37
+    set nvram_state._nvram_config.si_pin_cfg[0]   = 0x81
+    set nvram_state._nvram_config.si_pin_cfg[1]   = 0x81
+    set nvram_state._nvram_config.si_pin_cfg[2]   = 0x1
+    set nvram_state._nvram_config.si_pin_cfg[3]   = 0x1
+    set nvram_state._nvram_config.si_pin_count    = 4
+    set nvram_state._nvram_config.si_sdio_value   = 1
+    set nvram_state._nvram_config.nvram_flags     = 0x5e
+    set nvram_state._nvram_config.nvram_part_type = 0x2
+    set nvram_state._nvram_config.si_multiIO_pin_num[0] = 38
+    set nvram_state._nvram_config.si_multiIO_pin_num[1] = 39
+    set nvram_state._nvram_config.si_multiIO_pin_cfg[0] = 0x1
+    set nvram_state._nvram_config.si_multiIO_pin_cfg[1] = 0x1
+    set nvram_state._nvram_config.nvram_partition_offset[0] = 0
+    set nvram_state._nvram_config.nvram_partition_offset[1] = 0
+    set nvram_state._nvram_config.nvram_partition_offset[2] = 0
+    set nvram_state._nvram_config.nvram_partition_offset[3] = 0
+    set nvram_state._nvram_config.nvram_partition_offset[4] = 0
+    set nvram_state._nvram_config.nvram_partition_offset[5] = 0
+    set nvram_state._nvram_config.nvram_partition_offset[6] = 0
+    set nvram_state._nvram_config.nvram_partition_offset[7] = 0
+    set nvram_state._config_found = 1
+end
+
+define hw_hosted_w_flash
+	# p *((int *)0x5000)
+	# set *((int *)0x5000) = 0
+	# p *((int *)0x5000)
+
+	load_rom_32
+	# load_sdk_shell_32
+	#load_host_proxy
+	#load_otp_32
+
+	nowdt
+	nosleep
+
+	start_rom_32_flash
+end
+
+define runme_hosted_w_flash
+	del br
+	set confirm yes
+	set *((int *)0x5000) = 0
+   hb athos_main
+	c
+	set AR6k_hostless_override=0x01
+	b athos_init_part1 
+	c
+	set_nvram_state
+	#set_host_interest_area
+	#set nvram_fns._nvram_autoload=_hw_nvram_autoload	
+end
+
+define runme_flash
+    del br
+    set *((int *)0x5000) = 0
+end
+# sdk_flash
+#
+define sdk_flash
+cd .output/AR6002/hw7.6.1mb/bin/
+shell split -b 131072 raw_flashimage_AR401X_REV6_IOT_hostless_ap+sta_mcc_dualband_4bitflash.bin
+cd ../../../..
+
+  hw_flash
+  runme_flash
+
+  reset
+  set pagination off
+  set confirm no
+  delete
+
+  # add-symbol-file .output/AR6002/hw7.6.1mb/image/sw.rom.out 0x900000
+
+  reset
+  hbreak athos_init_part1
+  cont
+  delete
+  hbreak *0xa04c00
+  set *((int *)0x42081c)=0xa04c00
+  set *((int *)0x180c0) |= 0xcf
+  cont
+#end
+
+#define yy
+  delete
+  # load
+  set $a2=1
+  set normal_mode=0
+  watch *&db_signal
+  set db_signal=0xff
+  cont
+  cont
+
+  b write_flash
+  b sdk_flash.c:50
+
+  set $buff=db_buffer
+  set db_offset=0
+  set db_length=131072
+  restore .output/AR6002/hw7.6.1mb/bin/xaa binary $buff
+  set db_signal=0
+#end
+
+#define xx
+  cont
+  restore .output/AR6002/hw7.6.1mb/bin/xab binary $buff
+  set db_offset+=db_length
+  set db_signal=0
+  cont
+  restore .output/AR6002/hw7.6.1mb/bin/xac binary $buff
+  set db_offset+=db_length
+  set db_signal=0
+  cont
+  restore .output/AR6002/hw7.6.1mb/bin/xad binary $buff
+  set db_offset+=db_length
+  set db_signal=0
+  cont
+  restore .output/AR6002/hw7.6.1mb/bin/xae binary $buff
+  set db_offset+=db_length
+  set db_signal=0
+  cont
+  restore .output/AR6002/hw7.6.1mb/bin/xaf binary $buff
+  set db_offset+=db_length
+  set db_signal=0
+  cont
+  set db_signal=2
+  cont
+  delete
+  set confirm yes
+end
+
+
+define read_word_quad_setup
+ p "setup\n"
+ set $reg=*((int*)0x57000)
+ set $reg&=~10
+ set *((int*)0x57000)=$reg
+
+ set $reg=*((int*)0x57018)
+ set $reg|=0x103
+ set *((int*)0x57018)=$reg
+
+ set $reg=*((int*)0x57018)
+ p "conf:%x\n",$reg
+
+ set $rd_res=(*((int*)0x5701c)>>16)&0xffff
+ while $rd_res < 1
+    set $rd_res=(*((int*)0x5701c) >> 16)&0xffff
+#    p "waiting %x\n",$rd_res
+ end
+ p "waiting %x\n",$rd_res
+ set *((int*)0x57014)=0x05
+ set *((int*)0x57020)=0x6b
+ set *((int*)0x57020)=0x00
+ set *((int*)0x57020)=0x00
+ set *((int*)0x57020)=0x00
+ set *((int*)0x57020)=0x00
+
+ set *((int*)0x57018)=0x04
+ set $reg = *((int*)0x57018)
+end
+
+
+define read_word_quad
+ read_word_quad_setup
+ 
+ set *((int*)0x57014)=0x04
+#read from PIO Transfer status and wait until all bytes are in fifo
+ set $rd_res=*((int*)0x5701c)
+ p "waiting %x\n",$rd_res
+
+ set $rd_res=*((int*)0x5701c)&0xffff
+ while $rd_res < 4
+    set $rd_res=*((int*)0x5701c)&0xffff
+#    p "waiting %x\n",$rd_res
+ end
+#read bytes from fifo 1 byte at a time.
+ set $rd_res=*((int*)0x57028)&0xff
+ set $rd_res|=(*((int*)0x57028)&0xff)<<8
+ set $rd_res|=(*((int*)0x57028)&0xff)<<16
+ set $rd_res|=(*((int*)0x57028)&0xff)<<24
+ p "result=%x\n",$rd_res
+end

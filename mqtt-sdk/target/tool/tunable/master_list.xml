@@ -1,0 +1,2507 @@
+<!-- Master XML input file -->
+
+<!-- XML Description
+   NAME         ID of tunable
+   DATATYPE     10 (decimal) or 16 (hex)
+   DSETID       0=tuneenv (build-time)
+                1=sdk_proxy_tune
+                2=SYS_tunables
+                3=custom DataSet tunables
+   ID           When dsetid=0 an arbitrary value
+                When dsetid=1 an absolute address
+                When dsetid=2 an offset relative to SYS_tunables
+                When dsetid=3 custom interpretation
+   TYPE         0=direct  1=indirect
+   LOWER        low range
+   UPPER        high range
+   VALUE        default value
+   OPERATION    1=SET 2=AND 4=OR 8=NAND
+   SIZE         1, 2, or 4 bytes
+   DESC         Human description, up to 512B long
+-->
+
+<TUNABLE_LIST>
+    <PARAM>
+        <NAME>OP_FLAVOR</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>11</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Select WLAN operation "flavor":
+#  1 --> unidev      [single device, no concurrency, no P2P]
+#  2 --> unidev_p2p  [single device, no concurrency, with P2P]
+#  3 --> p2p+sta_scc [single-chan concurrency, w/P2P+STA]
+#  4 --> p2p+sta_mcc [multi-chan concurrency, w/P2P+STA]
+#  5 --> ap+sta_scc [single-chan concurrency, w/AP+STA]
+#  6 --> ap+sta_mcc [multi-channel concurrency, w/AP+STA]
+#  7 --> ap+sta_scc+bt [5 + BT stack + BT coex]
+#  8 --> ap+sta_mcc+bt [6 + BT stack + BT coex]
+#  9 --> ap+sta_mcc+aws [6 + aws]
+#  10--> ap+sta_mcc+mesh [6 + mesh]
+#  11--> ap+sta_mcc+homekit [6 + homekit]
+# Default is "unidev".
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>BAND</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>2</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Select WLAN bands:
+#    1 --> single-band    [2.4GHz only]
+#    2 --> dual-band      [2.4GHz or 5GHz]
+#
+# Default is dual-band.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>SNTPCLNT_ENABLE</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>1</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# SNTP Client disposition
+#    0 --> Disabled
+#    1 --> Enabled
+# Default is ???
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>DNSCLNT_ENABLE</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>1</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# DNS Client disposition
+#    0 --> Disabled
+#    1 --> Enabled
+# Default is ???
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>DNSSERV_ENABLE</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>1</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# DNS Server disposition
+#    0 --> Disabled
+#    1 --> Enabled
+# Default is ???
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>BRIDGEMODE_ENABLE</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>1</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Bridge Mode disposition
+#    0 --> Disabled
+#    1 --> Enabled
+# Default is ???
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM> <!-- TBD -->
+        <NAME>COUNTRY_CODE</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x10</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Three-byte numeric Country Code.
+# Default is determined by Board Data.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>ATH_TXBUF</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>2</LOWER>
+        <UPPER>16</UPPER>
+        <VALUE>4</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Number of buffers to use for WLAN Transmit.
+# Default is 4.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>ATH_RXBUF</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0xc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>8</LOWER>
+        <UPPER>48</UPPER>
+        <VALUE>16</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Number of buffers to use for WLAN Receive.
+# Default is 16.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>ATH_MGMTBUF</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0x10</ID>
+        <TYPE>0</TYPE>
+        <LOWER>10</LOWER>
+        <UPPER>12</UPPER>
+        <VALUE>12</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Number of buffers to use for WLAN management.
+# Default is 12.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>NUM_IRAM_BANKS</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>8</UPPER>
+        <VALUE>1</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Number of configurable 32KB banks for use as Instruction RAM.
+# There are a total of 16 32KB banks that can be switched between
+# Instructions (IRAM) and Data (DRAM).
+# Default is 0 bank of IRAM and 16 banks of DRAM.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>GPIO0_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x14</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# GPIO Configuration for each GPIO pin to be used when
+# the pin (or its associated peripheral) is ACTIVE.
+# Default is defined by system firmware.
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO1_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x18</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO2_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO3_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x20</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO4_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x24</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO5_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x28</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO6_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x2c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO7_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x30</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO8_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x34</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO9_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x38</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO10_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x3c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO11_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x40</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO12_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x44</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO13_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x48</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO14_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x4c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO15_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x50</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO16_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x54</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO17_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x58</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO18_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x5c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO19_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x60</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO20_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x64</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO21_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x68</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO22_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x6c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO23_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x70</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO24_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x74</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO25_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x78</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO26_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x7c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO27_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x80</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO28_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x84</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO29_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x88</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO30_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x8c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO31_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x90</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO32_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x94</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO33_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x98</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO34_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x9c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO35_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xa0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO36_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xa4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO37_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xa8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO38_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xac</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO39_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xb0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO40_ACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xb4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>GPIO0_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xb8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# GPIO Configuration for each GPIO pin to be used when
+# the pin (or its associated peripheral) is INACTIVE.
+# Default is defined by system firmware.
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO1_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xbc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO2_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xc0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO3_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xc4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO4_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xc8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO5_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xcc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO6_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xd0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO7_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xd4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO8_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xd8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO9_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xdc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO10_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xe0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO11_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xe4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO12_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xe8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO13_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xec</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO14_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xf0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO15_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xf4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO16_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xf8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO17_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0xfc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO18_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x100</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO19_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x104</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO20_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x108</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO21_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x10c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO22_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x110</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO23_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x114</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO24_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x118</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO25_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x11c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO26_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x120</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO27_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x124</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO28_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x128</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO29_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x12c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO30_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x130</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO31_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x134</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO32_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x138</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO33_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x13c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO34_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x140</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO35_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x144</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO36_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x148</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO37_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x14c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO38_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x150</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO39_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x154</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO40_INACTIVE_CONFIG</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x158</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>GPIO0_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x15c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Mapping for each GPIO pin to a peripheral ID.
+# Default is defined by system firmware.
+# Standard system peripheral IDs:
+#    0 --> unused
+#    1 --> TBD
+#    2 --> TBD
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO1_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x160</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO2_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x164</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO3_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x168</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO4_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x16c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO5_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x170</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO6_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x174</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO7_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x178</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO8_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x17c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO9_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x180</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO10_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x184</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO11_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x188</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO12_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x18c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO13_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x190</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO14_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x194</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO15_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x198</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO16_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x19c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO17_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1a0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO18_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1a4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO19_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1a8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO20_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1ac</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO21_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1b0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO22_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1b4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO23_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1b8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO24_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1bc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO25_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1c0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO26_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1c4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO27_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1c8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO28_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1cc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO29_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1d0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO30_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1d4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO31_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1d8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>GPIO32_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1dc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+        <PARAM>
+        <NAME>GPIO33_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1e0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+        <PARAM>
+        <NAME>GPIO34_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1e4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+        <PARAM>
+        <NAME>GPIO35_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1e8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+        <PARAM>
+        <NAME>GPIO36_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1ec</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+        <PARAM>
+        <NAME>GPIO37_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1f0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+        <PARAM>
+        <NAME>GPIO38_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1f4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+        <PARAM>
+        <NAME>GPIO39_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1f8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+        <PARAM>
+        <NAME>GPIO40_PERIPHERAL_ID</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x1fc</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+</DESC>
+    </PARAM>
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>PARTITION_ENTRY_1</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0x0F8000</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Start byte of flash partition #1
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>PARTITION_ENTRY_2</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0xffffffff</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Start byte of flash partition #2
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>PARTITION_ENTRY_3</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0xffffffff</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Start byte of flash partition #3
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>FLASH_CAPACITY</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0x200000</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Capacity (in bytes) of the SPI serial flash part.
+# Defaults to 2MB (8Mb).
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>FLASH_BLOCKSIZE</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0x10000</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Size of a flash block, determined by flash part in use.
+# Default is 64KB
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>FLASH_SECTORSIZE</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0x1000</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Size of a flash sector, determined by flash part in use.
+# Default is 4KB.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>FLASH_PAGESIZE</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0x100</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Size of a flash page, determined by flash part in use.
+# Default is 256B.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>RODATASET_START</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Partition-relative offset in flash of the ReadOnly DataSet area.
+# Upper 8 bits are interpreted as a partition number:
+#     0 --> partition 0
+#     1 --> partition 1
+#     2 --> partition 2
+#     3 --> partition 3
+#  0xff --> whatever software partition is in use
+# Default is 32KB before the start of the RW DataSet area
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>RWDATASET_START</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Partition-relative offset in flash of the Read/Write DataSet area.
+# Upper 8 bits are interpreted as a partition number:
+#     0 --> partition 0
+#     1 --> partition 1
+#     2 --> partition 2
+#     3 --> partition 3
+#  0xff --> whatever software partition is in use
+# Default is 16KB before the start of the partition table.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>RWDATASET_MAXSIZE</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+       A<VALUE>0xf000</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Size (in bytes) of the Read/Write DataSet area.
+# Default is 16KB.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>BOARD_DATA_ADDR</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0x14</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Address in DRAM of Board Data.
+# Default is to place Board Data dynamically.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>END_RAM_RESERVE_SZ</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>4</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>16384</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Number of bytes of Data RAM to reserve at the end of data space for custom uses.
+# Default is just sufficient to store DRAM-based DataSets.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>DSET_LIST_HEAD</NAME>
+        <DATATYPE>16</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0x18</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>0xffffffff</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Determine placement of DRAM DataSets.
+# Default is to place at end of DRAM.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>DESIRED_BAUD_RATE</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0x24</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>115200</UPPER>
+        <VALUE>115200</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Baud rate for the debug UART.
+# Should be a valid standard baud rate (9600, 19200, 38400, 57600, 115200)
+# Default is 115200.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>DBG_UART_TXPIN</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>0x2c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>29</UPPER>
+        <VALUE>7</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# GPIO pin to use for Tx on the debug UART
+# Default is pin 7.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+          <NAME>NUM_SOFTAP_CLIENTS</NAME>
+          <DATATYPE>10</DATATYPE>
+          <DSETID>2</DSETID>
+          <ID>0x200</ID>
+          <TYPE>0</TYPE>
+          <LOWER>4</LOWER>
+          <UPPER>10</UPPER>
+          <VALUE>10</VALUE>
+          <OPERATION>1</OPERATION>
+          <SIZE>4</SIZE>
+<DESC>
+# Number of SoftAP Clients
+# Default is 5
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+          <NAME>QCOM_MEMPOOL_CHUNKSIZE</NAME>
+          <DATATYPE>10</DATATYPE>
+          <DSETID>2</DSETID>
+          <ID>0x204</ID>
+          <TYPE>0</TYPE>
+          <LOWER>2</LOWER>
+          <UPPER>4</UPPER>
+          <VALUE>4</VALUE>
+          <OPERATION>1</OPERATION>
+          <SIZE>4</SIZE>
+<DESC>
+#QCOM Mempool Chunk size determines the size of the chunks qcom_mem_pool allocates
+#   from the system memory.
+#Smaller chunks lead to more overhead.
+#Requests from qcom_mem_alloc are satisfied from this pool.
+# Default is 4k; Minimum is 2k and Maximum is 4k
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+
+    <PARAM>
+        <NAME>HTTPC_BODY_MAXLEN</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>0</DSETID>
+        <ID>8</ID>
+        <TYPE>0</TYPE>
+        <LOWER>120</LOWER>
+        <UPPER>10240</UPPER>
+        <VALUE>1782</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# Max length od http client body.
+# Default is 1782.
+</DESC>
+    </PARAM>
+
+<!-- ###################################################################### -->
+<!-- ############## AthOS key duration for StackGhost feature ############# -->
+    <PARAM>
+          <NAME>STACKGHOST_ATHOS_KEY_INTERVAL</NAME>
+          <DATATYPE>10</DATATYPE>
+          <DSETID>2</DSETID>
+          <ID>0x208</ID>
+          <TYPE>0</TYPE>
+          <LOWER>30</LOWER>
+          <UPPER>3600</UPPER>
+          <VALUE>120</VALUE>
+          <OPERATION>1</OPERATION>
+          <SIZE>4</SIZE>
+<DESC>
+# StackGhost Athos Key Interval
+# This key interval is used to generate AthOS key periodically.
+#
+# NOTE : This value needs to be added as a new index, currently it is 
+#        using the same index as COUNTRY_CODE parameter (0x10).
+#
+# Default value is 120sec; Minimum is 30sec; Maximum is 3600sec(1 hour)
+</DESC>
+    </PARAM>
+
+    <PARAM>
+        <NAME>STACKGHOST_COOKIE_FIXED</NAME>
+        <DATATYPE>10</DATATYPE>
+        <DSETID>2</DSETID>
+        <ID>0x20c</ID>
+        <TYPE>0</TYPE>
+        <LOWER>0</LOWER>
+        <UPPER>1</UPPER>
+        <VALUE>0</VALUE>
+        <OPERATION>1</OPERATION>
+        <SIZE>4</SIZE>
+<DESC>
+# when StackGhost Cookie fixed, we could check more in stackghost mode.
+# Default is 0.
+</DESC>
+    </PARAM>
+
+</TUNABLE_LIST>

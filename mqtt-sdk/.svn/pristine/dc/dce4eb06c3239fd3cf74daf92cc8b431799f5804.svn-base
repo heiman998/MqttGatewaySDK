@@ -1,0 +1,90 @@
+# xt-gdb script to erase and re-program flash on
+# AR401x [Ruby 5.0]
+# 2016-07-21
+# 2017-01-06
+# NOTE: ALL PREVIOUS CONTENTS OF FLASH WILL BE LOST
+#
+# Usage:
+#   cd to "image" directory
+#   xt-gdb -x gdb.sdk_flash
+#     target remote <YOUR_OCD_IP_ADDRESS>:20000
+#     sdk_flash ../bin/raw_flashimage_AR401X_REV6_IOT_hostless_ap+sta_mcc_dualband_4bitflash.bin
+#     (You may change the raw_flashimage file, above, to any valid flash image.)
+#     reset
+#     c
+#
+
+define sdk_flash
+    reset
+    set *((int *)0x180c0) |= 0xcf
+    set pagination off
+    set confirm no
+    delete
+    reset
+    hbreak *0x900d90
+    cont
+    delete
+    hbreak *0xa05e00
+    set *((int *)0x42081c)=0xa05e00
+    set *((int *)0x180c0) |= 0xcf
+    cont
+    delete
+    load sdk_flash.out
+    add-symbol-file sdk_flash.out 0xa05e00
+    set $a10=1
+    set normal_mode=0
+    watch *&db_signal
+    set db_signal=0xff
+    cont
+    cont
+
+
+    # break the binary up into 64KB chunks
+    #  chunk files are named flash_chunks_XXX, where XXX begins with 000.
+    shell rm flash_chunks_*
+    shell split --numeric-suffixes --suffix-length=3 -b 65536 $arg0 flash_chunks_
+    shell echo set \$flash_chunk_count=$(ls -1 flash_chunks_* | wc -l) > chunk_count.gdb
+    source chunk_count.gdb
+
+    set $buff=db_buffer
+    set db_length=65536
+    set db_offset=0
+
+    set variable $current_chunk=0
+    while ($current_chunk < $flash_chunk_count)
+
+        # print the restore command for the next file chunk to a command file "chunk_cmd.gdb"
+        set logging off
+        shell rm chunk_cmd.gdb
+        set logging file chunk_cmd.gdb
+        set logging on 
+        printf "shell echo set \\$flash_chunk_length=$(wc -c flash_chunks_%03d | cut -f 1 -d \" \") > chunk_length.gdb\n", $current_chunk
+        printf "restore flash_chunks_%03d binary $buff\n", $current_chunk
+        set logging off
+
+
+        # update the amount of data to write
+        source chunk_count.gdb
+
+        # perform the restore into RAM
+        source chunk_cmd.gdb
+
+        # get the size of the chunk begin restored
+        source chunk_length.gdb
+
+        set db_length=$flash_chunk_length
+        set db_signal=0
+        cont
+        set db_offset+=db_length
+        set $current_chunk++
+    end
+ 
+    # delete the chunks on disk
+    shell rm flash_chunks_*
+
+    set db_signal=2
+    cont
+    delete
+    set confirm yes
+    echo \nsdk_flash is DONE\n
+end
